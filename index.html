@@ -1816,13 +1816,30 @@ function normalizeCellMapperTower(raw){
 }
 
 
+
+// Current 37: CellMapper is intentionally disabled and reserved for a later build.
+const CELLMAPPER_FEATURE_ENABLED=false;
+
 const REMOTE_BACKEND_KEY='towerRegistryRemoteBackendUrl';
 
 function normalizeBackendUrl(v){
  return String(v||'').trim().replace(/\/+$/,'');
 }
 function getRemoteBackendUrl(){
- return normalizeBackendUrl(localStorage.getItem(REMOTE_BACKEND_KEY)||'');
+ const saved=normalizeBackendUrl(localStorage.getItem(REMOTE_BACKEND_KEY)||'');
+ if(saved)return saved;
+
+ // Current 36: GitHub Pages frontend uses the user's dedicated Netlify backend.
+ if(/github\.io$/i.test(location.hostname)){
+   return 'https://quiet-medovik-986798.netlify.app';
+ }
+
+ // If deployed directly to Netlify, use same-origin functions.
+ if(location.protocol==='https:'){
+   return normalizeBackendUrl(location.origin);
+ }
+
+ return 'https://quiet-medovik-986798.netlify.app';
 }
 function saveRemoteBackendUrl(){
  const input=document.getElementById('remoteBackendUrl');
@@ -2282,7 +2299,7 @@ async function runBackgroundCellMapperLookup(fieldsOverride){
          <div class="label">Workflow start URL</div><div style="word-break:break-all">${esc(data.workflowStartUrl||'Not returned')}</div>
          <div class="label">Workflow video</div>
          <div>${data.videoInfo?.base64
-           ? `<button class="btn secondary" onclick="downloadLastCellMapperVideo()">Download Video</button>`
+           ? ``
            : esc(data.videoInfo?.note||'Not returned')}</div>
        </div>
      </div>`;
@@ -5764,7 +5781,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 34';
+  const BUILD='Current 37 Sync Only';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
