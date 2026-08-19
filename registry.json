@@ -1,0 +1,2463 @@
+{
+  "plmns": {
+    "310260": "T-Mobile",
+    "310830": "T-Mobile Starlink",
+    "312290": "STRATA Networks",
+    "310410": "AT&T",
+    "311480": "Verizon",
+    "310020": "Union Wireless",
+    "31020": "Union Wireless"
+  },
+  "rules": {
+    "strata_tac": {
+      "101": "Other carriers NOT allowed to roam",
+      "102": "Other carriers ARE allowed to roam"
+    },
+    "starlink_separate": true
+  },
+  "records": [
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Mazer Mountain Utah",
+      "eNB": "179795",
+      "bands": "B2 B12 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Mazer Mountain Utah",
+      "eNB": "188113",
+      "bands": "B12 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Roosevelt Hill Utah",
+      "eNB": "96304",
+      "bands": "B2 B12 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Roosevelt Utah",
+      "eNB": "187326",
+      "bands": "B12",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Randlett Bird Refuge Utah",
+      "eNB": "189389",
+      "bands": "B2 B12",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Randlett Bird Refuge Utah",
+      "eNB": "189386",
+      "bands": "B2 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Ft Duchesne Utah",
+      "eNB": "605939",
+      "bands": "B2 B12 B66 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Beachin Utah",
+      "eNB": "887354",
+      "bands": "B2 B12 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Beachin Utah",
+      "eNB": "96573",
+      "bands": "B12 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Vernal Ice Rink Utah",
+      "eNB": "196106",
+      "bands": "B12 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Vernal Ice Rink Utah",
+      "eNB": "95489",
+      "bands": "B2 B12 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Naples Utah",
+      "eNB": "639510",
+      "bands": "B2 B12 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Myton Utah",
+      "eNB": "178793",
+      "bands": "B2 B12 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Myton Utah",
+      "eNB": "884256",
+      "bands": "B12 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Bridgeland Utah",
+      "eNB": "96301",
+      "bands": "B2 B12 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Bridgeland Utah",
+      "eNB": "189662",
+      "bands": "B12 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Duchesne Utah",
+      "eNB": "96300",
+      "bands": "B2 B4 B12 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Duchesne Utah",
+      "eNB": "191395",
+      "bands": "B12 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Fruitland Utah",
+      "eNB": "184845",
+      "bands": "B2 B12 B66 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Fruitland Utah",
+      "eNB": "97112",
+      "bands": "B12 B66 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Tabiona Utah",
+      "eNB": "97243",
+      "bands": "B2 B12 B66 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Blue Mountain Utah",
+      "eNB": "176631",
+      "bands": "B2 B12 B66 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Blue Mountain Utah",
+      "eNB": "186058",
+      "bands": "B12 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Bonanza Utah",
+      "eNB": "351674",
+      "bands": "B2 B12 B66 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Strawberry East Utah",
+      "eNB": "186493",
+      "bands": "B2 B12 B66 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Strawberry West Utah",
+      "eNB": "96126",
+      "bands": "B2 B12 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Strawberry West Utah",
+      "eNB": "186010",
+      "bands": "B12 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Daniels Summit Utah",
+      "eNB": "175738",
+      "bands": "B12 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Bruins Point Utah",
+      "eNB": "178794",
+      "bands": "B2 B12 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Bruins Point Utah",
+      "eNB": "886139",
+      "bands": "B12 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Rangely Colorado",
+      "eNB": "102598",
+      "bands": "B12",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Massadona Colorado",
+      "eNB": "408687",
+      "bands": "B12 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Strata Complex Utah",
+      "eNB": "96303",
+      "bands": "B2 B12 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Strata Complex Utah",
+      "eNB": "189214",
+      "bands": "B12 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Raingley/Meeker Colorado",
+      "eNB": "102580",
+      "bands": "B12",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "East Massadona Colorado",
+      "eNB": "103127",
+      "bands": "B12",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Meeker Colorado",
+      "eNB": "32881",
+      "bands": "B2 B12 B66 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "UNKNOWN T-MOBILE SITE ?",
+      "eNB": "100089",
+      "bands": "B12",
+      "bandwidth": "",
+      "status": "unknown",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "LTE",
+      "site": "Dutch John Utah",
+      "eNB": "351678",
+      "bands": "B2 B66 B71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Strata Complex Utah",
+      "gNB": "1875624",
+      "bands": "n25",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Strata Complex Utah",
+      "gNB": "1856672",
+      "bands": "n41",
+      "bandwidth": "100 MHz",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Strata Complex Utah",
+      "gNB": "1849078",
+      "bands": "n71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Beachin Utah",
+      "gNB": "1849094",
+      "bands": "n25 n41 n71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Vernal Ice Rink Utah",
+      "gNB": "1860139",
+      "bands": "n41",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Roosevelt Hill Utah",
+      "gNB": "1877877",
+      "bands": "n25",
+      "bandwidth": "10 MHz",
+      "status": "confirmed",
+      "notes": "Exact NCI 7691784215 confirmed from scan; local cell 23, PCI 579.",
+      "nci": "7691784215",
+      "cell_id": "7691784215",
+      "local_cell": "23",
+      "pci": "579"
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Roosevelt Hill Utah",
+      "gNB": "1863421",
+      "bands": "n41",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": "",
+      "nci": "7632572719",
+      "cell_id": "7632572719",
+      "local_cell": "303"
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Roosevelt Hill Utah",
+      "gNB": "1849020",
+      "bands": "n41 n71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Grizzley Ridge Utah",
+      "gNB": "1873347",
+      "bands": "n41",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Grizzley Ridge Utah",
+      "gNB": "1861359",
+      "bands": "n25 n71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Mountain Home Utah",
+      "gNB": "1870151",
+      "bands": "n41",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Mountain Home Utah",
+      "gNB": "1872095",
+      "bands": "n25",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Duchesne Utah",
+      "gNB": "1849077",
+      "bands": "n71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Fruitland Utah",
+      "gNB": "1839012",
+      "bands": "n71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Strawberry East Utah",
+      "gNB": "1872544",
+      "bands": "n71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Strawberry West Utah",
+      "gNB": "1839063",
+      "bands": "n71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Blue Mountain Utah",
+      "gNB": "1841519",
+      "bands": "n25 n71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Blue Mountain Utah",
+      "gNB": "1872157",
+      "bands": "n41",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Bruins Point Utah",
+      "gNB": "1866355",
+      "bands": "n71",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Ft Duchesne Utah ?",
+      "gNB": "1864801",
+      "bands": "n41",
+      "bandwidth": "60 MHz",
+      "status": "provisional",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Ft Duchesne Utah ?",
+      "gNB": "1099123",
+      "bands": "n25",
+      "bandwidth": "10 MHz",
+      "status": "provisional",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Ft Duchesne Utah ?",
+      "gNB": "1113051",
+      "bands": "n71",
+      "bandwidth": "20 MHz",
+      "status": "provisional",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "Naples ?",
+      "gNB": "1118681",
+      "bands": "n41",
+      "bandwidth": "100 MHz",
+      "status": "provisional",
+      "notes": ""
+    },
+    {
+      "carrier": "T-Mobile",
+      "radio": "5G",
+      "site": "UNKNOWN T-MOBILE 5G SITE ?",
+      "gNB": "1049526",
+      "bands": "n71",
+      "bandwidth": "20 MHz",
+      "status": "provisional",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Bonanza/Rangely Road",
+      "eNB": "1020",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Bonanza/Rainbow",
+      "eNB": "1021",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "West Sand Wash Road",
+      "eNB": "1022",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Sandwash Road/Bonanza Road",
+      "eNB": "1023",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Myton South",
+      "eNB": "1024",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "SR88/Randalet Road",
+      "eNB": "1025",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Blue Mountain / Utah-Colorado Line",
+      "eNB": "1026",
+      "bands": "B2 B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Buck Point",
+      "eNB": "1027",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Main Tabiona",
+      "eNB": "1028",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Fruitland",
+      "eNB": "1029",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "SR35/US40/SR208",
+      "eNB": "1030",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Tabiona/Mountain Home",
+      "eNB": "1031",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Altamont",
+      "eNB": "1032",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "North Altamont",
+      "eNB": "1033",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Neola",
+      "eNB": "1034",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Duchesne",
+      "eNB": "1035",
+      "bands": "B2 B4 B5 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Bridgeland",
+      "eNB": "1036",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Flattop Myton",
+      "eNB": "1037",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Roosevelt Main",
+      "eNB": "1038",
+      "bands": "B2 B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Cove",
+      "eNB": "1039",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Ft Duchesne",
+      "eNB": "1040",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Lapoint",
+      "eNB": "1041",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Matt Warner",
+      "eNB": "1042",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "SR88/US40",
+      "eNB": "1043",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Myton",
+      "eNB": "1044",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Maser Mountain",
+      "eNB": "1045",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Strata Data Center",
+      "eNB": "1046",
+      "bands": "B2 B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Uintah High School",
+      "eNB": "1047",
+      "bands": "B2 B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "N 191 McCoy Flats",
+      "eNB": "1048",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Vernal North",
+      "eNB": "1049",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Naples",
+      "eNB": "1050",
+      "bands": "B4 B5 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Jensen Highway / East Vernal",
+      "eNB": "1051",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Myton/9 Mile",
+      "eNB": "1054",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Grizzled Ridge",
+      "eNB": "1055",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Bird Refuge Randalet",
+      "eNB": "1056",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Bonanza North",
+      "eNB": "1057",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Diamond Mountain",
+      "eNB": "1058",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Indian Canyon",
+      "eNB": "1059",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Tabiona Mountain",
+      "eNB": "1060",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Dry Fork",
+      "eNB": "1061",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Red Fleet Switchbacks",
+      "eNB": "1062",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Tabiona West",
+      "eNB": "1063",
+      "bands": "B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Vernal Ice Rink",
+      "eNB": "1064",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "191/9 Mile Road",
+      "eNB": "1065",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Jensen / Dinosaur Corridor",
+      "eNB": "1067",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Duchesne/Fruitland",
+      "eNB": "1068",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Drive Inn",
+      "eNB": "1069",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Strata Complex",
+      "eNB": "1070",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Ceaderview",
+      "eNB": "1071",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Upalco/Altamont",
+      "eNB": "1072",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Bruins Point",
+      "eNB": "1073",
+      "bands": "B2 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Naples South",
+      "eNB": "1074",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Deep Creek Mountain",
+      "eNB": "1075",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Roosevelt Main / Union High",
+      "eNB": "1076",
+      "bands": "B2 B5 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Randalet",
+      "eNB": "1077",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "UNMAPPED STRATA SITE ?",
+      "eNB": "1079",
+      "bands": "B5",
+      "bandwidth": "",
+      "status": "unknown",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Monarch",
+      "eNB": "1081",
+      "bands": "B4 B5",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Strawberry West",
+      "eNB": "1101",
+      "bands": "B4",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Daniels Summit",
+      "eNB": "1103",
+      "bands": "B4",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Current Creek",
+      "eNB": "1104",
+      "bands": "B4",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Strawberry East",
+      "eNB": "1107",
+      "bands": "B4",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Manila / Flaming Gorge",
+      "eNB": "1114",
+      "bands": "B2 B4",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Dutch John",
+      "eNB": "1115",
+      "bands": "B2 B4",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Strawberry Road Turn Off",
+      "eNB": "1117",
+      "bands": "B4",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Meeker Colorado",
+      "eNB": "1207",
+      "bands": "B2",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "Colorado / Dinosaur",
+      "eNB": "1215",
+      "bands": "B2",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "STRATA Networks",
+      "radio": "LTE",
+      "site": "COW ?",
+      "eNB": "11001",
+      "bands": "B4",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Neola Utah",
+      "eNB": "456090",
+      "bands": "B2 B12 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Lapoint Utah",
+      "eNB": "456096",
+      "bands": "B12 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Deep Creek Mountain Utah",
+      "eNB": "456077",
+      "bands": "B2 B12 B14 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Uintah High School Utah",
+      "eNB": "456079",
+      "bands": "B2 B12 B17 B30 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Beachin Utah",
+      "eNB": "455307",
+      "bands": "B2 B12 B17 B30 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Strata Data Center, Vernal Utah",
+      "eNB": "456081",
+      "bands": "B2 B12 B17 B30 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "191 North Vernal Utah",
+      "eNB": "456084",
+      "bands": "B2 B12 B17 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Naples Utah",
+      "eNB": "456082",
+      "bands": "B2 B12 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Wonsist Valley Road Utah",
+      "eNB": "456078",
+      "bands": "B2 B12 B14 B30 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Bonanza Utah",
+      "eNB": "455310",
+      "bands": "B2 B12 B14 B17",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Blue Mountain Utah",
+      "eNB": "456083",
+      "bands": "B12 B14 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Jensen Utah",
+      "eNB": "450047",
+      "bands": "B2 B12",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Grizley Ridge Utah",
+      "eNB": "456085",
+      "bands": "B2 B12 B14 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Dutch John West Utah",
+      "eNB": "456041",
+      "bands": "B12 B14 B17 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Dutch John East Utah",
+      "eNB": "456091",
+      "bands": "B2 B12 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Manila Main Utah",
+      "eNB": "456087",
+      "bands": "B2 B12 B14 B17 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Manila West Utah",
+      "eNB": "456040",
+      "bands": "B12 B14 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Mountain Home Utah",
+      "eNB": "456068",
+      "bands": "B2 B12",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Mountain Home Utah",
+      "eNB": "456069",
+      "bands": "B2 B12",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Duchesne Utah",
+      "eNB": "456063",
+      "bands": "B12",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Indian Canyon Utah",
+      "eNB": "456059",
+      "bands": "B12 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Fruitland Utah",
+      "eNB": "450365",
+      "bands": "B2 B12 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "US40/SR208/SR35 Utah ?",
+      "eNB": "456067",
+      "bands": "B12 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name; eNB and bands visible in AT&T LTE CellMapper screenshot. Waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "First Baptist Church",
+      "eNB": "456028",
+      "bands": "B2 B12 B14 B30 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Harley Davidson Vernal Utah",
+      "eNB": "450002",
+      "bands": "B2 B14 B30 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Verizon",
+      "radio": "LTE",
+      "site": "Neola Utah",
+      "eNB": "960034",
+      "bands": "B13",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Verizon",
+      "radio": "LTE",
+      "site": "Cove Utah",
+      "eNB": "960039",
+      "bands": "B13",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Verizon",
+      "radio": "LTE",
+      "site": "Roosevelt Main Utah",
+      "eNB": "960038",
+      "bands": "B13",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Verizon",
+      "radio": "LTE",
+      "site": "Drive Inn Utah",
+      "eNB": "960069",
+      "bands": "B13",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Verizon",
+      "radio": "LTE",
+      "site": "Flattop Myton Utah",
+      "eNB": "960037",
+      "bands": "B13",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Verizon",
+      "radio": "LTE",
+      "site": "Ft Duchesne Utah",
+      "eNB": "960040",
+      "bands": "B13",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Verizon",
+      "radio": "LTE",
+      "site": "US40/SR88 Utah",
+      "eNB": "960043",
+      "bands": "B13",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Verizon",
+      "radio": "LTE",
+      "site": "Strata Complex Utah",
+      "eNB": "960070",
+      "bands": "B13",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Verizon",
+      "radio": "LTE",
+      "site": "Bettys Cafe Utah",
+      "eNB": "960046",
+      "bands": "B13",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Verizon",
+      "radio": "LTE",
+      "site": "Vernal Ice Rink Utah",
+      "eNB": "960064",
+      "bands": "B13",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Verizon",
+      "radio": "LTE",
+      "site": "Uintah High School Utah",
+      "eNB": "960047",
+      "bands": "B13",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Verizon",
+      "radio": "LTE",
+      "site": "191 N Vernal Utah",
+      "eNB": "960049",
+      "bands": "B13",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Verizon",
+      "radio": "LTE",
+      "site": "Naples Utah",
+      "eNB": "960050",
+      "bands": "B13",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Verizon",
+      "radio": "LTE",
+      "site": "Jensen Utah",
+      "eNB": "960067",
+      "bands": "B13",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Verizon",
+      "radio": "LTE",
+      "site": "Bridgeland Mountain Utah",
+      "eNB": "960036",
+      "bands": "B13",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Verizon",
+      "radio": "LTE",
+      "site": "Duchesne Utah",
+      "eNB": "960035",
+      "bands": "B13",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Verizon",
+      "radio": "LTE",
+      "site": "SR208/US40/SR35 Utah",
+      "eNB": "960030",
+      "bands": "B13",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Verizon",
+      "radio": "LTE",
+      "site": "Dutch John Utah",
+      "eNB": "960015",
+      "bands": "B13",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": ""
+    },
+    {
+      "carrier": "Union Wireless",
+      "radio": "LTE",
+      "site": "Little Mountain Wyoming 191",
+      "eNB": "1013",
+      "bands": "B12",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": "",
+      "plmn": "310020"
+    },
+    {
+      "carrier": "Union Wireless",
+      "radio": "LTE",
+      "site": "Dutch John 191",
+      "eNB": "1058",
+      "bands": "B12",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": "",
+      "plmn": "310020"
+    },
+    {
+      "carrier": "Union Wireless",
+      "radio": "LTE",
+      "site": "Meeker Colorado",
+      "eNB": "1321",
+      "bands": "B12",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": "",
+      "plmn": "310020"
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Strawberry Reservoir West Utah ?",
+      "eNB": "455370",
+      "bands": "B2 B12",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Strawberry Reservoir Utah ?",
+      "eNB": "450003",
+      "bands": "B2 B12",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Strawberry Southwest Utah ?",
+      "eNB": "454052",
+      "bands": "B2 B12 B17",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Strawberry South Utah ?",
+      "eNB": "450136",
+      "bands": "B2 B12 B14",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "US-40 West Duchesne Utah ?",
+      "eNB": "455051",
+      "bands": "B2 B12 B14 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Duchesne West Utah ?",
+      "eNB": "456093",
+      "bands": "B2 B12 B14 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Myton West Utah ?",
+      "eNB": "450439",
+      "bands": "B2 B12 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Bridgeland Mountain",
+      "eNB": "456065",
+      "bands": "B2 B12",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": "User-confirmed site name."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Nine Mile / South Myton Utah ?",
+      "eNB": "456066",
+      "bands": "B2 B12",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Ouray / South Uintah Basin Utah ?",
+      "eNB": "450013",
+      "bands": "B2 B12 B14",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Nine Mile South Utah ?",
+      "eNB": "450586",
+      "bands": "B2 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Southwest Uintah Basin Utah ?",
+      "eNB": "456021",
+      "bands": "B2 B12 B14",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Vernal West Utah ?",
+      "eNB": "455306",
+      "bands": "B2 B12 B14 B30 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Ft Duchesne",
+      "eNB": "450328",
+      "bands": "B2 B66",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": "User-confirmed site name."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Jensen West Utah ?",
+      "eNB": "456072",
+      "bands": "B12 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Diamond Mountain / Utah-Colorado Border Utah ?",
+      "eNB": "456088",
+      "bands": "B2 B17 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Northwest Colorado ?",
+      "eNB": "384467",
+      "bands": "B2 B12",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Dinosaur North Colorado ?",
+      "eNB": "384466",
+      "bands": "B2 B12 B14",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Dinosaur East Colorado ?",
+      "eNB": "384465",
+      "bands": "B2 B12 B14 B17",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Rangely Colorado ?",
+      "eNB": "384462",
+      "bands": "B12 B14 B17 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Rangely East Colorado ?",
+      "eNB": "384464",
+      "bands": "B12 B14 B17 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Rangely South Colorado ?",
+      "eNB": "384461",
+      "bands": "B12 B14 B17 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "177401",
+      "site": "Helper Gun Club Road",
+      "status": "confirmed",
+      "bands": "B2 B12 B66 B71",
+      "notes": "Verified green CellMapper site; approximate address Gun Club Road, Helper, Utah. Co-located with eNB 186040."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "186040",
+      "site": "Helper Gun Club Road",
+      "status": "confirmed",
+      "bands": "B12 B71",
+      "notes": "Verified green CellMapper site; co-located with eNB 177401 at Helper Gun Club Road."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "94520",
+      "site": "Radio Tower Road",
+      "status": "confirmed",
+      "bands": "B2 B4 B12 B66",
+      "notes": "CellMapper approximate address: Radio Tower Road, Utah. Same physical site as eNB 198702."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "185726",
+      "site": "Tucker",
+      "status": "confirmed",
+      "bands": "B2 B12 B66 B71",
+      "notes": "CellMapper approximate address: Tucker, Utah. Same physical site as eNB 175768."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "185727",
+      "site": "Mill Fork",
+      "status": "confirmed",
+      "bands": "B2 B12 B66 B71",
+      "notes": "CellMapper approximate address: Mill Fork, Utah. Same physical site as eNB 177833."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "372333",
+      "site": "Salem Peak",
+      "status": "confirmed",
+      "bands": "B12 B71",
+      "notes": "CellMapper approximate address: Dixon Peak, Utah; mapped site is on Salem Peak Cell Tower Road. Same physical site as eNB 176776."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "882562",
+      "site": "Mapleton City Park",
+      "status": "confirmed",
+      "bands": "B2 B12 B66 B71",
+      "notes": "CellMapper approximate address: Mapleton City Park, Mapleton, Utah."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "184851",
+      "site": "Bear Canyon Road",
+      "status": "confirmed",
+      "bands": "B2 B12 B66 B71",
+      "notes": "CellMapper approximate address: Bear Canyon Road, Utah. Same physical site as eNB 90726."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "605936",
+      "site": "Sailboat Beach Day-Use Area",
+      "status": "confirmed",
+      "bands": "B2 B12 B66",
+      "notes": "CellMapper approximate address: Sailboat Beach Day-Use Area, State Route 314, Utah."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "92629",
+      "site": "Center Creek Cemetery",
+      "status": "confirmed",
+      "bands": "B2 B4 B12 B66 B71",
+      "notes": "CellMapper approximate address: Center Creek Cemetery, East 2400 South Street, Independence, Utah. Same physical site as eNB 183458."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "381641",
+      "site": "Francis East Country Lane",
+      "status": "confirmed",
+      "bands": "B2 B12 B66 B71",
+      "notes": "CellMapper approximate address: East Country Lane South, Francis, Utah."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "186025",
+      "site": "Kamas City Park",
+      "status": "confirmed",
+      "bands": "B12 B71",
+      "notes": "CellMapper approximate address: Kamas City Park, Kamas, Utah. Same physical site as eNB 97056."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "186029",
+      "site": "Oakley New Lane Road",
+      "status": "confirmed",
+      "bands": "B12 B71",
+      "notes": "CellMapper approximate address: New Lane Road Trail, Oakley, Utah. Same physical site as eNB 97055."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "96056",
+      "site": "Sunrise Ridge",
+      "status": "confirmed",
+      "bands": "B2 B12 B66 B71",
+      "notes": "CellMapper approximate address: Sunrise Ridge, Utah. Same physical site as eNB 186066."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "198702",
+      "site": "Radio Tower Road",
+      "status": "confirmed",
+      "bands": "B12 B71",
+      "notes": "Same physical CellMapper site as eNB 94520; paired from adjacent/overlapping tower marker."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "175768",
+      "site": "Tucker",
+      "status": "confirmed",
+      "bands": "B12 B66 B71",
+      "notes": "Same physical CellMapper site as eNB 185726; paired from adjacent/overlapping tower marker."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "177833",
+      "site": "Mill Fork",
+      "status": "confirmed",
+      "bands": "B4 B12 B66",
+      "notes": "Same physical CellMapper site as eNB 185727; paired from adjacent/overlapping tower marker."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "176776",
+      "site": "Salem Peak",
+      "status": "confirmed",
+      "bands": "B2 B12 B66 B71",
+      "notes": "Same physical CellMapper site as eNB 372333; paired from adjacent/overlapping tower marker."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "90726",
+      "site": "Bear Canyon Road",
+      "status": "confirmed",
+      "bands": "B2 B12 B71",
+      "notes": "Same physical CellMapper site as eNB 184851; paired from adjacent/overlapping tower marker."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "183458",
+      "site": "Center Creek Cemetery",
+      "status": "confirmed",
+      "bands": "B12 B71",
+      "notes": "Same physical CellMapper site as eNB 92629; paired from adjacent/overlapping tower marker."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "97056",
+      "site": "Kamas City Park",
+      "status": "confirmed",
+      "bands": "B2 B12 B66 B71",
+      "notes": "Same physical CellMapper site as eNB 186025; paired from adjacent/overlapping tower marker."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "97055",
+      "site": "Oakley New Lane Road",
+      "status": "confirmed",
+      "bands": "B2 B12 B66",
+      "notes": "Same physical CellMapper site as eNB 186029; paired from adjacent/overlapping tower marker."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "186066",
+      "site": "Sunrise Ridge",
+      "status": "confirmed",
+      "bands": "B12 B71",
+      "notes": "Same physical CellMapper site as eNB 96056; paired from adjacent/overlapping tower marker."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork North ?",
+      "status": "provisional",
+      "bands": "n25 n71",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1863257"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork North ?",
+      "status": "provisional",
+      "bands": "n41",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1863262"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork 800 North ?",
+      "status": "provisional",
+      "bands": "n41",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1854933"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork 800 North ?",
+      "status": "provisional",
+      "bands": "n71",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1844892"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork Southwest ?",
+      "status": "provisional",
+      "bands": "n25",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1878397"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork Southwest ?",
+      "status": "provisional",
+      "bands": "n41",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1849602"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork Southeast ?",
+      "status": "provisional",
+      "bands": "n25",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1878321"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork Southeast ?",
+      "status": "provisional",
+      "bands": "n41",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1856035"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork East Canyon Road ?",
+      "status": "provisional",
+      "bands": "n25 n71",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1104837"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork East Canyon Road ?",
+      "status": "provisional",
+      "bands": "n41",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1841602"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork East Canyon Road ?",
+      "status": "provisional",
+      "bands": "n71",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1841527"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Mapleton Heights ?",
+      "status": "provisional",
+      "bands": "n25 n71",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1863255"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Mapleton Heights ?",
+      "status": "provisional",
+      "bands": "n41",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1863260"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Mapleton Main Street ?",
+      "status": "provisional",
+      "bands": "n25 n71",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1863256"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Mapleton Main Street ?",
+      "status": "provisional",
+      "bands": "n41",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1863261"
+    },
+    {
+      "carrier": "AT&T",
+      "plmn": "310410",
+      "radio": "LTE",
+      "eNB": "45066",
+      "site": "Nine Mile Road",
+      "status": "confirmed",
+      "bands": "",
+      "notes": "User-confirmed site name."
+    },
+    {
+      "carrier": "Union Wireless",
+      "plmn": "310020",
+      "radio": "LTE",
+      "eNB": "1298",
+      "site": "Burnt Hill / Evanston Wyoming",
+      "bands": "B2 B4 B12",
+      "status": "confirmed"
+    },
+    {
+      "carrier": "Union Wireless",
+      "plmn": "310020",
+      "radio": "LTE",
+      "eNB": "10298",
+      "site": "Burnt Hill / Evanston Wyoming",
+      "bands": "B2 B4 B5 B12 B17",
+      "status": "confirmed"
+    },
+    {
+      "carrier": "Union Wireless",
+      "plmn": "310020",
+      "radio": "LTE",
+      "eNB": "1068",
+      "site": "Rex Peak Utah",
+      "bands": "B12",
+      "status": "confirmed"
+    },
+    {
+      "carrier": "Union Wireless",
+      "plmn": "310020",
+      "radio": "LTE",
+      "eNB": "1064",
+      "site": "Bear River City / State Highway 150 South Wyoming",
+      "bands": "B12",
+      "status": "confirmed"
+    },
+    {
+      "carrier": "Union Wireless",
+      "plmn": "310020",
+      "radio": "LTE",
+      "eNB": "1261",
+      "site": "Fort Bridger Wyoming / KBVZ-FM",
+      "bands": "B12 B17",
+      "status": "confirmed"
+    },
+    {
+      "carrier": "Union Wireless",
+      "plmn": "310020",
+      "radio": "LTE",
+      "eNB": "1267",
+      "site": "Dwight D. Eisenhower Highway Wyoming",
+      "bands": "B2 B4 B17",
+      "status": "confirmed"
+    },
+    {
+      "carrier": "Union Wireless",
+      "plmn": "310020",
+      "radio": "LTE",
+      "eNB": "10267",
+      "site": "Dwight D. Eisenhower Highway Wyoming",
+      "bands": "B2 B4 B5 B12 B48",
+      "status": "confirmed"
+    }
+  ]
+}
