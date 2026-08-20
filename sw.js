@@ -1,44 +1,61 @@
-const CACHE='mctr-current37-sync-only-20260819';
-const ASSETS=['./registry.json','./manifest.json','./icon-192.png','./icon-512.png','./apple-touch-icon.png'];
 
-self.skipWaiting();
+const CACHE='mctr-current40-20260819-v1';
+const CORE=[
+ './',
+ './index.html',
+ './manifest.json',
+ './icon-192.png',
+ './icon-512.png',
+ './apple-touch-icon.png'
+];
 
 self.addEventListener('install',event=>{
-  event.waitUntil(
-    caches.open(CACHE).then(cache=>cache.addAll(ASSETS))
-  );
+ self.skipWaiting();
+ event.waitUntil(
+   caches.open(CACHE).then(cache=>cache.addAll(CORE).catch(()=>{}))
+ );
 });
 
 self.addEventListener('activate',event=>{
-  event.waitUntil(
-    caches.keys()
-      .then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))
-      .then(()=>self.clients.claim())
-  );
+ event.waitUntil((async()=>{
+   const names=await caches.keys();
+   await Promise.all(names.filter(n=>n!==CACHE).map(n=>caches.delete(n)));
+   await self.clients.claim();
+ })());
 });
 
 self.addEventListener('fetch',event=>{
-  const req=event.request;
-  const url=new URL(req.url);
+ const req=event.request;
+ if(req.method!=='GET')return;
 
-  // Never pin HTML/navigation to an old cached frontend.
-  if(req.mode==='navigate' || url.pathname.endsWith('/index.html') || url.pathname.endsWith('/')){
-    event.respondWith(
-      fetch(req)
-        .then(resp=>{
-          const copy=resp.clone();
-          caches.open(CACHE).then(cache=>cache.put(req,copy));
-          return resp;
-        })
-        .catch(()=>caches.match(req))
-    );
-    return;
-  }
+ const url=new URL(req.url);
 
-  // Registry data must be network-first so newly deployed towers are visible.
-  if(url.pathname.endsWith('/registry.json')){
-    event.respondWith(fetch(req,{cache:'no-store'}).then(resp=>{const copy=resp.clone();caches.open(CACHE).then(cache=>cache.put(req,copy));return resp}).catch(()=>caches.match(req)));
-    return;
-  }
-  event.respondWith(caches.match(req).then(cached=>cached || fetch(req).then(resp=>{const copy=resp.clone();caches.open(CACHE).then(cache=>cache.put(req,copy));return resp})));
+ // Always prefer network for document/navigation requests so new GitHub deploys win.
+ if(req.mode==='navigate' || req.destination==='document' || url.pathname.endsWith('/index.html')){
+   event.respondWith((async()=>{
+     try{
+       const fresh=await fetch(req,{cache:'no-store'});
+       const cache=await caches.open(CACHE);
+       cache.put('./index.html',fresh.clone()).catch(()=>{});
+       return fresh;
+     }catch(e){
+       return (await caches.match('./index.html')) || (await caches.match('./')) || Response.error();
+     }
+   })());
+   return;
+ }
+
+ // Static assets: cache-first, then network and refresh cache.
+ event.respondWith((async()=>{
+   const cached=await caches.match(req);
+   if(cached)return cached;
+   try{
+     const fresh=await fetch(req);
+     const cache=await caches.open(CACHE);
+     cache.put(req,fresh.clone()).catch(()=>{});
+     return fresh;
+   }catch(e){
+     return Response.error();
+   }
+ })());
 });

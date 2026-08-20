@@ -247,6 +247,41 @@ main, .container, .content{
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 
 <script>
+
+const CURRENT40_CACHE_PURGE_KEY='current40CachePurgeDone';
+async function current40PurgeOldCaches(){
+ try{
+   if(localStorage.getItem(CURRENT40_CACHE_PURGE_KEY)==='1')return;
+   if('caches' in window){
+     const names=await caches.keys();
+     await Promise.all(names.map(name=>{
+       if(!/current40/i.test(name))return caches.delete(name);
+     }));
+   }
+   if('serviceWorker' in navigator){
+     const regs=await navigator.serviceWorker.getRegistrations();
+     for(const reg of regs){
+       try{await reg.unregister()}catch(e){}
+     }
+   }
+   localStorage.setItem(CURRENT40_CACHE_PURGE_KEY,'1');
+ }catch(e){
+   console.warn('Current 40 cache purge',e);
+ }
+}
+current40PurgeOldCaches();
+
+if('serviceWorker' in navigator){
+ let refreshing=false;
+ navigator.serviceWorker.addEventListener('controllerchange',()=>{
+   if(refreshing)return;
+   refreshing=true;
+   setTimeout(()=>location.reload(),150);
+ });
+}
+
+
+
 if('serviceWorker' in navigator){
   navigator.serviceWorker.getRegistrations().then(rs=>Promise.all(rs.map(r=>r.unregister()))).catch(()=>{});
 }
@@ -269,7 +304,7 @@ if('serviceWorker' in navigator){
 <div class="wrap">
 <h1>Master Cellular Tower Registry</h1>
 <div id="deviceLayoutInfo" class="small muted" style="margin-top:4px"></div>
-<div class="muted">Editable offline tower registry with LTE/5G identifier math.</div>
+<div class="muted">Editable offline tower registry with LTE/5G identifier math.</div><div class="notice" id="buildMarker" style="margin-top:8px"><b>CURRENT 40:</b> Cache reset + Sync only. CellMapper removed.</div>
 <div id="cloudSyncHeader" class="small muted" style="margin-top:4px">☁ Sync: starting…</div>
 
 <div class="tabs">
@@ -1822,40 +1857,19 @@ const CELLMAPPER_FEATURE_ENABLED=false;
 
 const REMOTE_BACKEND_KEY='towerRegistryRemoteBackendUrl';
 
+try{localStorage.removeItem(REMOTE_BACKEND_KEY);}catch(e){}
+
+
 function normalizeBackendUrl(v){
  return String(v||'').trim().replace(/\/+$/,'');
 }
 function getRemoteBackendUrl(){
- const saved=normalizeBackendUrl(localStorage.getItem(REMOTE_BACKEND_KEY)||'');
- if(saved)return saved;
-
- // Current 36: GitHub Pages frontend uses the user's dedicated Netlify backend.
- if(/github\.io$/i.test(location.hostname)){
-   return 'https://quiet-medovik-986798.netlify.app';
- }
-
- // If deployed directly to Netlify, use same-origin functions.
- if(location.protocol==='https:'){
-   return normalizeBackendUrl(location.origin);
- }
-
  return 'https://quiet-medovik-986798.netlify.app';
 }
 function saveRemoteBackendUrl(){
- const input=document.getElementById('remoteBackendUrl');
  const status=document.getElementById('remoteBackendStatus');
- const url=normalizeBackendUrl(input?.value||'');
- if(!url){
-   localStorage.removeItem(REMOTE_BACKEND_KEY);
-   if(status)status.textContent='Backend URL cleared.';
-   return;
- }
- if(!/^https:\/\//i.test(url)){
-   if(status)status.textContent='Use an https:// backend URL.';
-   return;
- }
- localStorage.setItem(REMOTE_BACKEND_KEY,url);
- if(status)status.textContent='Backend URL saved on this device.';
+ localStorage.removeItem(REMOTE_BACKEND_KEY);
+ if(status)status.textContent='Backend fixed to https://quiet-medovik-986798.netlify.app';
 }
 async function testRemoteBackend(){
  const status=document.getElementById('remoteBackendStatus');
@@ -1973,7 +1987,7 @@ async function cloudSyncNow(force=false){
  if(cloudSyncBusy)return;
  const base=getRemoteBackendUrl();
  if(!base){
-   setCloudSyncStatus('☁ Sync: set Backend URL in Backup');
+   setCloudSyncStatus('☁ Sync error: backend URL missing');
    return;
  }
  if(!navigator.onLine){
@@ -1986,17 +2000,28 @@ async function cloudSyncNow(force=false){
    const state=getCloudState();
    setCloudSyncStatus('☁ Syncing…');
 
+   // text/plain keeps this a "simple" cross-origin request, avoiding a CORS
+   // preflight between GitHub Pages and the Netlify sync backend.
    const resp=await fetch(base+'/.netlify/functions/registry-sync',{
      method:'POST',
-     headers:{'content-type':'application/json','x-tower-pin':cloudSyncPin()},
+     headers:{'content-type':'text/plain;charset=UTF-8'},
      body:JSON.stringify({
+       pin:cloudSyncPin(),
        deviceId:cloudDeviceId(),
        registry:DB,
        clientRevision:Number(state.remoteRevision||0)
-     })
+     }),
+     cache:'no-store'
    });
-   const data=await resp.json().catch(()=>({}));
-   if(!resp.ok||!data.ok)throw new Error(data.error||('HTTP '+resp.status));
+
+   const raw=await resp.text();
+   let data={};
+   try{data=JSON.parse(raw||'{}')}catch(e){}
+
+   if(!resp.ok||!data.ok){
+     const detail=String(data.error||raw||('HTTP '+resp.status)).slice(0,120);
+     throw new Error(`HTTP ${resp.status}: ${detail}`);
+   }
 
    if(data.registry&&Array.isArray(data.registry.records)){
      DB=mergeCloudRegistry(DB,data.registry);
@@ -2008,13 +2033,15 @@ async function cloudSyncNow(force=false){
      lastSync:Date.now(),
      baseline:cloneJson(DB)
    });
-   setCloudSyncStatus('☁ Synced ✓',true);
+   setCloudSyncStatus(`☁ Synced ✓ • rev ${Number(data.revision||0)}`,true);
    try{renderRegistry()}catch(e){}
  }catch(e){
    const state=getCloudState();
    state.pending=true;
+   state.lastError=String(e?.message||e||'Unknown sync error');
    setCloudState(state);
-   setCloudSyncStatus(navigator.onLine?'☁ Sync pending • backend unavailable':'☁ Offline • changes saved locally');
+   const msg=String(e?.message||e||'Unknown error').replace(/\s+/g,' ').slice(0,140);
+   setCloudSyncStatus(navigator.onLine?`☁ Sync error: ${msg}`:'☁ Offline • changes saved locally');
  }finally{
    cloudSyncBusy=false;
  }
@@ -5781,7 +5808,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 37 Sync Only';
+  const BUILD='Current 40';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
