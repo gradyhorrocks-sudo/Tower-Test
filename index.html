@@ -304,8 +304,10 @@ if('serviceWorker' in navigator){
 <div class="wrap">
 <h1>Master Cellular Tower Registry</h1>
 <div id="deviceLayoutInfo" class="small muted" style="margin-top:4px"></div>
-<div class="muted">Editable offline tower registry with LTE/5G identifier math.</div><div class="notice" id="buildMarker" style="margin-top:8px"><b>CURRENT 40:</b> Cache reset + Sync only. CellMapper removed.</div>
+<div class="muted">Editable offline tower registry with LTE/5G identifier math.</div><div class="notice" id="buildMarker" style="margin-top:8px"><b>CURRENT 43:</b> Device passcode 312290. Offline sync preserved. CellMapper removed.</div>
 <div id="cloudSyncHeader" class="small muted" style="margin-top:4px">☁ Sync: starting…</div>
+<div id="offlineRegistryStatus" class="small muted" style="margin-top:4px">📥 Offline registry: checking…</div>
+<div id="offlineUploadStatus" class="small muted" style="margin-top:4px">⬆ Offline upload queue: checking…</div>
 
 <div class="tabs">
 <button class="tab active" onclick="showTab('lookup',this)">Lookup</button>
@@ -622,11 +624,29 @@ function goBackFromAddEdit(){
 function esc(s){return String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2200)}
 function keyOf(r){return `${r.carrier}|${r.radio}|${r.eNB||r.gNB||''}`}
-function saveLocal(){
+function saveLocal(reason='tower/registry save'){
+ try{stampRegistryForSync()}catch(e){}
  localStorage.setItem('masterTowerRegistry',JSON.stringify(DB));
+ try{
+   const state=getCloudState();
+   saveOfflineRegistryCopy(DB,Number(state.remoteRevision||0));
+   showOfflineRegistryStatus();
+ }catch(e){}
+ try{queueRegistrySnapshotForUpload(reason)}catch(e){}
  try{markCloudPending()}catch(e){}
 }
-function loadLocal(){const x=localStorage.getItem('masterTowerRegistry'); if(x){try{return JSON.parse(x)}catch(e){}} return null}
+function loadLocal(){
+ const x=localStorage.getItem('masterTowerRegistry');
+ if(x){
+   try{
+     const parsed=JSON.parse(x);
+     if(parsed && Array.isArray(parsed.records))return parsed;
+   }catch(e){}
+ }
+ const offline=loadOfflineRegistryCopy();
+ if(offline)return offline;
+ return null;
+}
 
 const REGISTRY_DATA_REVISION='current-2-20260818';
 const FORCE_5G_IDS=new Set(['1863257','1863262','1854933','1844892','1878397','1849602','1878321','1856035','1104837','1841602','1841527','1863255','1863260','1863256','1863261']);
@@ -666,7 +686,7 @@ function mergeBuiltinRegistry(builtin,local){
 
 
 
-const FIXED_APP_PIN='159357';
+const FIXED_APP_PIN='312290';
 
 function openBackupWithPin(btn){
   const entered=prompt('Enter PIN to open Backup');
@@ -717,6 +737,8 @@ function unlockApp(){
 
 
 document.addEventListener('DOMContentLoaded',()=>{
+ showOfflineUploadStatus();
+ showOfflineRegistryStatus();
  const btn=document.getElementById('lockBtn');
  const pin=document.getElementById('lockPin');
 
@@ -1203,7 +1225,7 @@ function saveAllPendingChanges(){
       }
     }
 
-    saveLocal();
+    saveLocal('Save All tower changes');
 
     pendingTowerChanges={};
     refreshPendingChangesUI();
@@ -1251,7 +1273,12 @@ function discardAllPendingChanges(){
 }
 
 fetch('registry.json?v=current2',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('registry.json '+r.status);return r.json()}).then(j=>{
- BUILTIN=j;DB=purgeForbiddenNrBandsFromRegistry(mergeBuiltinRegistry(j,loadLocal()));saveLocal();renderRegistry();refreshUniversalLookupIfPresent();refreshCarrierList();syncPlmn();
+ BUILTIN=j;DB=purgeForbiddenNrBandsFromRegistry(mergeBuiltinRegistry(j,loadLocal()));
+ try{
+   localStorage.setItem('masterTowerRegistry',JSON.stringify(DB));
+   saveOfflineRegistryCopy(DB,Number(getCloudState().remoteRevision||0));
+ }catch(e){}
+ renderRegistry();refreshUniversalLookupIfPresent();refreshCarrierList();syncPlmn();
 }).catch(err=>{console.error('Registry load failed',err);const out=document.getElementById('out');if(out)out.innerHTML='<div class="card unknown">Could not load registry.json.</div>'});
 
 function signalRating(kind,v){
@@ -1894,6 +1921,86 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 
 
+
+const OFFLINE_REGISTRY_KEY='towerRegistryOfflineMaster_v41';
+const OFFLINE_REGISTRY_META_KEY='towerRegistryOfflineMasterMeta_v41';
+
+function saveOfflineRegistryCopy(registry,revision=0){
+ try{
+   if(!registry || !Array.isArray(registry.records))return false;
+   localStorage.setItem(OFFLINE_REGISTRY_KEY,JSON.stringify(registry));
+   localStorage.setItem(OFFLINE_REGISTRY_META_KEY,JSON.stringify({
+     revision:Number(revision||0),
+     savedAt:Date.now(),
+     count:registry.records.length
+   }));
+   return true;
+ }catch(e){return false}
+}
+function loadOfflineRegistryCopy(){
+ try{
+   const raw=localStorage.getItem(OFFLINE_REGISTRY_KEY);
+   if(!raw)return null;
+   const x=JSON.parse(raw);
+   return x && Array.isArray(x.records)?x:null;
+ }catch(e){return null}
+}
+function offlineRegistryMeta(){
+ try{return JSON.parse(localStorage.getItem(OFFLINE_REGISTRY_META_KEY)||'{}')||{}}catch(e){return {}}
+}
+function showOfflineRegistryStatus(){
+ const meta=offlineRegistryMeta();
+ const el=document.getElementById('offlineRegistryStatus');
+ if(!el)return;
+ const count=Number(meta.count||0);
+ if(count){
+   const when=meta.savedAt?new Date(meta.savedAt).toLocaleString():'';
+   el.textContent=`📥 Offline registry: ${count} towers saved${when?' • '+when:''}`;
+ }else{
+   el.textContent='📥 Offline registry: not downloaded yet';
+ }
+}
+
+
+const OFFLINE_UPLOAD_QUEUE_KEY='towerRegistryOfflineUploadQueue_v42';
+
+function getOfflineUploadQueue(){
+ try{
+   const q=JSON.parse(localStorage.getItem(OFFLINE_UPLOAD_QUEUE_KEY)||'[]');
+   return Array.isArray(q)?q:[];
+ }catch(e){return []}
+}
+function setOfflineUploadQueue(q){
+ try{localStorage.setItem(OFFLINE_UPLOAD_QUEUE_KEY,JSON.stringify(Array.isArray(q)?q:[]))}catch(e){}
+ showOfflineUploadStatus();
+}
+function queueRegistrySnapshotForUpload(reason='tower save'){
+ try{
+   const now=Date.now();
+   const q=getOfflineUploadQueue();
+   // Keep a compact durable journal. The full registry already lives in
+   // masterTowerRegistry/offline master, so each queue entry only needs metadata.
+   q.push({id:`${now}-${Math.random().toString(36).slice(2,8)}`,savedAt:now,reason:String(reason||'tower save')});
+   // Cap journal growth while preserving the most recent offline saves.
+   setOfflineUploadQueue(q.slice(-100));
+ }catch(e){}
+}
+function clearOfflineUploadQueue(){
+ setOfflineUploadQueue([]);
+}
+function showOfflineUploadStatus(){
+ const el=document.getElementById('offlineUploadStatus');
+ if(!el)return;
+ const q=getOfflineUploadQueue();
+ if(q.length){
+   el.textContent=navigator.onLine
+     ? `⬆ ${q.length} saved change${q.length===1?'':'s'} waiting for confirmed upload`
+     : `⬆ ${q.length} saved change${q.length===1?'':'s'} stored on this device • uploads when service returns`;
+ }else{
+   el.textContent='⬆ Offline upload queue: clear';
+ }
+}
+
 const CLOUD_SYNC_STATE_KEY='towerRegistryCloudSyncState_v34';
 const CLOUD_SYNC_DEVICE_KEY='towerRegistryCloudDeviceId_v34';
 const CLOUD_SYNC_PIN_KEY='towerRegistryCloudPin_v34';
@@ -1909,7 +2016,7 @@ function cloudDeviceId(){
  return id;
 }
 function cloudSyncPin(){
- return localStorage.getItem(CLOUD_SYNC_PIN_KEY)||FIXED_APP_PIN;
+ return '159357';
 }
 function setCloudSyncStatus(text,good=false){
  for(const id of ['cloudSyncStatus','cloudSyncHeader']){
@@ -1962,12 +2069,24 @@ function stampRegistryForSync(){
  const state=getCloudState();
  const baseline=state.baseline||{};
  const baseMap=new Map((baseline.records||[]).map(r=>[recordSyncKey(r),r]));
+
  for(const r of DB.records||[]){
-   const k=recordSyncKey(r), old=baseMap.get(k);
-   const a=JSON.stringify({...r,_syncModifiedAt:undefined});
-   const b=old?JSON.stringify({...old,_syncModifiedAt:undefined}):'';
-   if(!old || a!==b){
-     if(!Number(r._syncModifiedAt))r._syncModifiedAt=now;
+   const k=recordSyncKey(r);
+   const old=baseMap.get(k);
+
+   const cleanCurrent={...r};
+   const cleanOld=old?{...old}:null;
+   delete cleanCurrent._syncModifiedAt;
+   if(cleanOld)delete cleanOld._syncModifiedAt;
+
+   const changed=!old || JSON.stringify(cleanCurrent)!==JSON.stringify(cleanOld);
+
+   // Critical offline fix: every new/changed record gets a fresh modification
+   // timestamp, even if it had already synced in the past.
+   if(changed){
+     r._syncModifiedAt=now;
+   }else if(old && Number(old._syncModifiedAt||0)){
+     r._syncModifiedAt=Number(old._syncModifiedAt);
    }
  }
 }
@@ -2026,6 +2145,8 @@ async function cloudSyncNow(force=false){
    if(data.registry&&Array.isArray(data.registry.records)){
      DB=mergeCloudRegistry(DB,data.registry);
      localStorage.setItem('masterTowerRegistry',JSON.stringify(DB));
+       saveOfflineRegistryCopy(DB,Number(data.revision||0));
+     showOfflineRegistryStatus();
    }
    setCloudState({
      pending:false,
@@ -2033,6 +2154,8 @@ async function cloudSyncNow(force=false){
      lastSync:Date.now(),
      baseline:cloneJson(DB)
    });
+   clearOfflineUploadQueue();
+   showOfflineUploadStatus();
    setCloudSyncStatus(`☁ Synced ✓ • rev ${Number(data.revision||0)}`,true);
    try{renderRegistry()}catch(e){}
  }catch(e){
@@ -2046,8 +2169,8 @@ async function cloudSyncNow(force=false){
    cloudSyncBusy=false;
  }
 }
-window.addEventListener('online',()=>cloudSyncNow(true));
-window.addEventListener('offline',()=>setCloudSyncStatus('☁ Offline • changes saved locally'));
+window.addEventListener('online',()=>{showOfflineUploadStatus();cloudSyncNow(true)});
+window.addEventListener('offline',()=>{setCloudSyncStatus('☁ Offline • changes saved locally');showOfflineUploadStatus()});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')cloudSyncNow(false)});
 document.addEventListener('DOMContentLoaded',()=>{
  setTimeout(()=>cloudSyncNow(false),1200);
@@ -2732,8 +2855,8 @@ function coreSaveRecord(){
      toast('Tower edit added to pending changes.');
    }else{
      DB.records.push(rec);
-     saveLocal();
-     toast('New tower saved.');
+     saveLocal('new tower saved');
+     toast(navigator.onLine?'New tower saved.':'New tower saved on this device • will upload when service returns.');
    }
  } else {
    DB.records.push(rec);
@@ -4123,7 +4246,7 @@ function saveAllScanEdits(){
    }
  }
 
- saveLocal();
+ saveLocal('scan tower + signal values saved');
  activeScanRecordKey=keyOf(rec);
 
  try{renderRegistry();}catch(e){}
@@ -5808,7 +5931,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 40';
+  const BUILD='Current 43';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

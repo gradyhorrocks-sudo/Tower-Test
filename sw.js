@@ -1,13 +1,13 @@
 
-const CACHE='mctr-current40-20260819-v1';
+const CACHE='mctr-current43-passcode-20260820-v1';
 const CORE=[
  './',
  './index.html',
  './manifest.json',
  './icon-192.png',
  './icon-512.png',
- './apple-touch-icon.png'
-];
+ './apple-touch-icon.png',
+ './registry.json'];
 
 self.addEventListener('install',event=>{
  self.skipWaiting();
