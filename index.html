@@ -251,23 +251,10 @@ main, .container, .content{
 const CURRENT40_CACHE_PURGE_KEY='current40CachePurgeDone';
 async function current40PurgeOldCaches(){
  try{
-   if(localStorage.getItem(CURRENT40_CACHE_PURGE_KEY)==='1')return;
-   if('caches' in window){
-     const names=await caches.keys();
-     await Promise.all(names.map(name=>{
-       if(!/current40/i.test(name))return caches.delete(name);
-     }));
-   }
-   if('serviceWorker' in navigator){
-     const regs=await navigator.serviceWorker.getRegistrations();
-     for(const reg of regs){
-       try{await reg.unregister()}catch(e){}
-     }
-   }
-   localStorage.setItem(CURRENT40_CACHE_PURGE_KEY,'1');
- }catch(e){
-   console.warn('Current 40 cache purge',e);
- }
+   if(!('caches' in window))return;
+   const names=await caches.keys();
+   await Promise.all(names.filter(name=>!/current46/i.test(name)).map(name=>caches.delete(name)));
+ }catch(e){}
 }
 current40PurgeOldCaches();
 
@@ -282,9 +269,23 @@ if('serviceWorker' in navigator){
 
 
 
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.getRegistrations().then(rs=>Promise.all(rs.map(r=>r.unregister()))).catch(()=>{});
+
+</script>
+<script>
+
+async function registerTowerServiceWorker(){
+ if(!('serviceWorker' in navigator))return;
+ try{
+   const swUrl=new URL('./sw.js?v=current46',location.href).href;
+   const reg=await navigator.serviceWorker.register(swUrl,{scope:'./'});
+   await navigator.serviceWorker.ready;
+   return reg;
+ }catch(e){
+   console.warn('Service worker registration failed',e);
+ }
 }
+window.addEventListener('load',()=>registerTowerServiceWorker());
+
 </script>
 </head>
 <body>
@@ -2015,26 +2016,67 @@ const OFFLINE_OCR_ASSETS=[
 
 async function warmOfflineOcr(){
  const el=document.getElementById('offlineOcrStatus');
+ const urls=[
+   './ocr/worker.min.js',
+   './ocr/core/tesseract-core.wasm.js',
+   './ocr/core/tesseract-core-simd.wasm.js',
+   './ocr/core/tesseract-core-lstm.wasm.js',
+   './ocr/core/tesseract-core-simd-lstm.wasm.js',
+   './ocr/lang/eng.traineddata.gz'
+ ];
+
  if(!('serviceWorker' in navigator)){
-   if(el)el.textContent='OCR offline cache unavailable in this browser.';
-   return;
+   if(el)el.textContent='Offline scanner unavailable: service worker not supported';
+   return false;
  }
+
  try{
+   await registerTowerServiceWorker();
    await navigator.serviceWorker.ready;
-   if(el)el.textContent=navigator.onLine?'Preparing offline scanner…':'Offline scanner using saved OCR files.';
-   if(navigator.onLine){
-     const results=await Promise.allSettled(
-       OFFLINE_OCR_ASSETS.map(u=>fetch(u,{cache:'reload'}))
-     );
-     const good=results.filter(x=>x.status==='fulfilled'&&x.value&&x.value.ok).length;
-     if(el)el.textContent=good===OFFLINE_OCR_ASSETS.length
-       ? 'Offline scanner ready ✓'
-       : `Offline scanner preparing (${good}/${OFFLINE_OCR_ASSETS.length})`;
-   }else{
-     if(el)el.textContent='Offline scanner ready from local cache';
+
+   if(!navigator.serviceWorker.controller){
+     if(el)el.textContent='Offline scanner initializing… reload once';
+     return false;
    }
+
+   if(el)el.textContent=navigator.onLine
+     ? 'Preparing offline scanner…'
+     : 'Checking offline scanner files…';
+
+   let good=0;
+   const failures=[];
+
+   for(const rel of urls){
+     try{
+       const r=await fetch(new URL(rel,location.href).href,{cache:'no-store'});
+       if(r.ok){
+         good++;
+         // Consume a tiny part so Safari actually completes/commits the fetch.
+         await r.arrayBuffer();
+       }else{
+         failures.push(`${rel} (${r.status})`);
+       }
+     }catch(e){
+       failures.push(`${rel} (${String(e&&e.message||e)})`);
+     }
+   }
+
+   if(good===urls.length){
+     if(el)el.textContent='Offline scanner ready ✓';
+     localStorage.setItem('towerOfflineOcrReady_v46','1');
+     return true;
+   }
+
+   if(!navigator.onLine && localStorage.getItem('towerOfflineOcrReady_v46')==='1'){
+     if(el)el.textContent='Offline scanner cache incomplete • reconnect once';
+   }else if(el){
+     el.textContent=`Offline scanner preparing (${good}/${urls.length})`;
+   }
+   console.warn('Offline OCR missing:',failures);
+   return false;
  }catch(e){
-   if(el)el.textContent=navigator.onLine?'Offline scanner cache could not finish':'Offline scanner using available local files';
+   if(el)el.textContent='Offline scanner setup error: '+String(e&&e.message||e).slice(0,80);
+   return false;
  }
 }
 
@@ -6043,6 +6085,12 @@ async function pasteScanImage(){
 }
 
 runOcrBtn.addEventListener('click',async()=>{
+ const offlineReady=await warmOfflineOcr();
+ if(!offlineReady && !navigator.onLine){
+   document.getElementById('ocrStatus').textContent='Offline scanner is not fully cached yet. Connect once, wait for “Offline scanner ready ✓”, then it will work without service.';
+   return;
+ }
+
  const f=scanImage.files&&scanImage.files[0];
  if(!f){document.getElementById('ocrStatus').textContent='Choose a screenshot first.';return;}
  if(!window.Tesseract){
@@ -6057,9 +6105,9 @@ runOcrBtn.addEventListener('click',async()=>{
    document.getElementById('ocrStatus').textContent='Scanning and autofilling fields…';
    const enhanced=await makeEnhancedImage(f);
    const r1=await Tesseract.recognize(enhanced,'eng',{
-     workerPath:'./ocr/worker.min.js',
-     corePath:'./ocr/core/',
-     langPath:'./ocr/lang/',
+     workerPath:new URL('./ocr/worker.min.js',location.href).href,
+     corePath:new URL('./ocr/core/',location.href).href,
+     langPath:new URL('./ocr/lang/',location.href).href,
      logger:m=>{if(m.status==='recognizing text')document.getElementById('ocrStatus').textContent=`Enhanced scan ${Math.round((m.progress||0)*100)}%…`;}
    },{blocks:true,tsv:true});
    const d1=r1?.data||{};
@@ -6069,9 +6117,9 @@ runOcrBtn.addEventListener('click',async()=>{
 
    // Always do a second pass on the original. Merge whichever pass reads each row best.
    const r2=await Tesseract.recognize(f,'eng',{
-     workerPath:'./ocr/worker.min.js',
-     corePath:'./ocr/core/',
-     langPath:'./ocr/lang/',
+     workerPath:new URL('./ocr/worker.min.js',location.href).href,
+     corePath:new URL('./ocr/core/',location.href).href,
+     langPath:new URL('./ocr/lang/',location.href).href,
      logger:m=>{if(m.status==='recognizing text')document.getElementById('ocrStatus').textContent=`Original scan ${Math.round((m.progress||0)*100)}%…`;}
    },{blocks:true,tsv:true});
    const d2=r2?.data||{};
@@ -6104,7 +6152,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 45';
+  const BUILD='Current 46';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
