@@ -304,7 +304,7 @@ if('serviceWorker' in navigator){
 <div class="wrap">
 <h1>Master Cellular Tower Registry</h1>
 <div id="deviceLayoutInfo" class="small muted" style="margin-top:4px"></div>
-<div class="muted">Editable offline tower registry with LTE/5G identifier math.</div><div class="notice" id="buildMarker" style="margin-top:8px"><b>CURRENT 43:</b> Device passcode 312290. Offline sync preserved. CellMapper removed.</div>
+<div class="muted">Editable offline tower registry with LTE/5G identifier math.</div>
 <div id="cloudSyncHeader" class="small muted" style="margin-top:4px">☁ Sync: starting…</div>
 <div id="offlineRegistryStatus" class="small muted" style="margin-top:4px">📥 Offline registry: checking…</div>
 <div id="offlineUploadStatus" class="small muted" style="margin-top:4px">⬆ Offline upload queue: checking…</div>
@@ -2156,7 +2156,7 @@ async function cloudSyncNow(force=false){
    });
    clearOfflineUploadQueue();
    showOfflineUploadStatus();
-   setCloudSyncStatus(`☁ Synced ✓ • rev ${Number(data.revision||0)}`,true);
+   setCloudSyncStatus('☁ Synced ✓',true);
    try{renderRegistry()}catch(e){}
  }catch(e){
    const state=getCloudState();
@@ -3474,7 +3474,95 @@ function describe5gNciStatus(fields){
  if(fields?.cell)return '5G NCI read successfully. No matching gNB is currently mapped in the registry.';
  return '5G Cell ID/NCI was not read.';
 }
+
+function normalizeRegistryPlmn(v){
+ return String(v||'').replace(/\D/g,'');
+}
+function registryCarrierMatchForPlmn(rec,plmn){
+ const p=normalizeRegistryPlmn(plmn);
+ const rp=normalizeRegistryPlmn(rec?.plmn);
+ if(!p)return true;
+ if(rp===p)return true;
+ // Union Wireless may appear as 31020 or 310020.
+ if((p==='31020'||p==='310020') && (rp==='31020'||rp==='310020'))return true;
+ return false;
+}
+function findLocalRegistryTowerFromScan(fields){
+ if(!fields || !DB || !Array.isArray(DB.records))return null;
+
+ const radio=String(fields.radio||'').toUpperCase();
+ const plmn=normalizeRegistryPlmn(fields.plmn);
+ const cell=String(fields.cell||fields.cell_id||fields.nci||'').replace(/\D/g,'');
+ let sid=String(fields.sid||fields.eNB||fields.gNB||'').replace(/\D/g,'');
+
+ if(radio==='LTE'){
+   if(!sid && cell){
+     try{sid=(BigInt(cell)/256n).toString()}catch(e){}
+   }
+   if(!sid)return null;
+   return DB.records.find(r=>
+     String(r.radio||'').toUpperCase()==='LTE' &&
+     String(r.eNB||'').replace(/\D/g,'')===sid &&
+     registryCarrierMatchForPlmn(r,plmn)
+   ) || null;
+ }
+
+ if(radio==='5G'){
+   if(!sid && cell){
+     try{sid=(BigInt(cell)/4096n).toString()}catch(e){}
+   }
+   if(!sid)return null;
+   return DB.records.find(r=>
+     String(r.radio||'').toUpperCase()==='5G' &&
+     String(r.gNB||'').replace(/\D/g,'')===sid &&
+     registryCarrierMatchForPlmn(r,plmn)
+   ) || null;
+ }
+
+ // If OCR did not classify radio but we have a Cell ID, try both math paths
+ // against the downloaded/local registry instead of requiring internet.
+ if(cell){
+   let lteSid='', nrSid='';
+   try{
+     const n=BigInt(cell);
+     lteSid=(n/256n).toString();
+     nrSid=(n/4096n).toString();
+   }catch(e){}
+   const lte=DB.records.find(r=>
+     String(r.radio||'').toUpperCase()==='LTE' &&
+     String(r.eNB||'').replace(/\D/g,'')===lteSid &&
+     registryCarrierMatchForPlmn(r,plmn)
+   );
+   if(lte)return lte;
+   const nr=DB.records.find(r=>
+     String(r.radio||'').toUpperCase()==='5G' &&
+     String(r.gNB||'').replace(/\D/g,'')===nrSid &&
+     registryCarrierMatchForPlmn(r,plmn)
+   );
+   if(nr)return nr;
+ }
+ return null;
+}
+function applyLocalRegistryMatchToScan(fields){
+ const rec=findLocalRegistryTowerFromScan(fields);
+ if(!rec)return fields;
+ fields.site=rec.site||fields.site||'';
+ fields.carrier=rec.carrier||fields.carrier||'';
+ fields.plmn=rec.plmn||fields.plmn||'';
+ fields.radio=rec.radio||fields.radio||'';
+ if(rec.radio==='LTE'){
+   fields.sid=String(rec.eNB||fields.sid||'');
+   fields.eNB=String(rec.eNB||fields.eNB||'');
+ }else if(rec.radio==='5G'){
+   fields.sid=String(rec.gNB||fields.sid||'');
+   fields.gNB=String(rec.gNB||fields.gNB||'');
+ }
+ return fields;
+}
+
+
 function identifyFromScan(fields){
+ fields=applyLocalRegistryMatchToScan(fields);
  if(String(fields?.radio||'').toUpperCase()==='5G'){
    fields.band=sanitizeNrBand(fields.band);
    const d=derive5gFromRegistry(fields.cell,fields.carrier,fields.plmn);
@@ -5686,6 +5774,7 @@ function maintainDuplicateDualRadioBadge(fields){
  setTimeout(()=>{try{obs.disconnect();}catch(e){}},2000);
 }
 function fillScanResults(x,text){
+ x=applyLocalRegistryMatchToScan(x);
  if(x?._hotspotFormat){
    x.radio='LTE';
    if(x.band && !/^B/i.test(x.band))x.band='B'+String(x.band).replace(/\D/g,'');
@@ -5931,7 +6020,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 43';
+  const BUILD='Current 44';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

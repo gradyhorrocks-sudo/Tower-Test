@@ -1,5 +1,5 @@
 
-const CACHE='mctr-current43-passcode-20260820-v1';
+const CACHE='mctr-current44-offline-scan-fix-20260820-v1';
 const CORE=[
  './',
  './index.html',
