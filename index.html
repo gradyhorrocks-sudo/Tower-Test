@@ -273,18 +273,6 @@ if('serviceWorker' in navigator){
 </script>
 <script>
 
-async function registerTowerServiceWorker(){
- if(!('serviceWorker' in navigator))return;
- try{
-   const swUrl=new URL('./sw.js?v=current46',location.href).href;
-   const reg=await navigator.serviceWorker.register(swUrl,{scope:'./'});
-   await navigator.serviceWorker.ready;
-   return reg;
- }catch(e){
-   console.warn('Service worker registration failed',e);
- }
-}
-window.addEventListener('load',()=>registerTowerServiceWorker());
 
 </script>
 </head>
@@ -739,7 +727,7 @@ function unlockApp(){
 
 
 document.addEventListener('DOMContentLoaded',()=>{
- warmOfflineOcr();
+ setTimeout(()=>warmOfflineOcr().catch(()=>{}),1200);
  showOfflineUploadStatus();
  showOfflineRegistryStatus();
  const btn=document.getElementById('lockBtn');
@@ -6152,7 +6140,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 46';
+  const BUILD='Current 47';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
@@ -6403,5 +6391,12 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
 })();
 </script>
 
+<script>
+if('serviceWorker' in navigator){
+ window.addEventListener('load',()=>{
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+ });
+}
+</script>
 </body>
 </html>

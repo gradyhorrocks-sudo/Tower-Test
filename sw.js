@@ -1,5 +1,5 @@
-const CACHE='mctr-current46-offline-ocr-20260821-v2';
 
+const CACHE='mctr-current47-restored-offline-shell-v1';
 const CORE=[
  './',
  './index.html',
@@ -7,60 +7,13 @@ const CORE=[
  './icon-192.png',
  './icon-512.png',
  './apple-touch-icon.png',
- './registry.json'
-];
-
-const OCR_REMOTE={
- '/ocr/worker.min.js':
-   'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',
-
- '/ocr/core/tesseract-core.wasm.js':
-   'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1/tesseract-core.wasm.js',
-
- '/ocr/core/tesseract-core-simd.wasm.js':
-   'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1/tesseract-core-simd.wasm.js',
-
- '/ocr/core/tesseract-core-lstm.wasm.js':
-   'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1/tesseract-core-lstm.wasm.js',
-
- '/ocr/core/tesseract-core-simd-lstm.wasm.js':
-   'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1/tesseract-core-simd-lstm.wasm.js',
-
- '/ocr/lang/eng.traineddata.gz':
-   'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int/eng.traineddata.gz'
-};
-
-const TESSERACT_MAIN =
- 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
-
-async function fetchAndCache(cache, requestKey, remoteUrl){
- const request = typeof requestKey==='string' ? new Request(requestKey) : requestKey;
-
- // Already cached = immediately usable offline.
- const hit=await cache.match(request);
- if(hit)return hit;
-
- // Online first-time warmup.
- const resp=await fetch(remoteUrl,{cache:'no-store',mode:'cors'});
- if(!resp || !resp.ok)throw new Error(`HTTP ${resp&&resp.status} for ${remoteUrl}`);
-
- await cache.put(request,resp.clone());
- return resp;
-}
+ './registry.json'];
 
 self.addEventListener('install',event=>{
  self.skipWaiting();
- event.waitUntil((async()=>{
-   const cache=await caches.open(CACHE);
-
-   // App shell failure must not prevent SW installation.
-   for(const url of CORE){
-     try{
-       const r=await fetch(url,{cache:'reload'});
-       if(r&&r.ok)await cache.put(url,r.clone());
-     }catch(e){}
-   }
- })());
+ event.waitUntil(
+   caches.open(CACHE).then(cache=>cache.addAll(CORE).catch(()=>{}))
+ );
 });
 
 self.addEventListener('activate',event=>{
@@ -77,64 +30,29 @@ self.addEventListener('fetch',event=>{
 
  const url=new URL(req.url);
 
- // Virtual OCR files. These are requested from the SAME origin by Tesseract.
- // On first online use, fetch CDN -> cache. Offline, serve cache.
- if(url.origin===self.location.origin && OCR_REMOTE[url.pathname]){
+ // Always prefer network for document/navigation requests so new GitHub deploys win.
+ if(req.mode==='navigate' || req.destination==='document' || url.pathname.endsWith('/index.html')){
    event.respondWith((async()=>{
-     const cache=await caches.open(CACHE);
-     const cached=await cache.match(req);
-     if(cached)return cached;
-     try{
-       return await fetchAndCache(cache,req,OCR_REMOTE[url.pathname]);
-     }catch(e){
-       return Response.error();
-     }
-   })());
-   return;
- }
-
- // Cache the main Tesseract browser API too.
- if(req.url===TESSERACT_MAIN){
-   event.respondWith((async()=>{
-     const cache=await caches.open(CACHE);
-     const cached=await cache.match(req);
-     if(cached)return cached;
-     try{
-       const fresh=await fetch(req,{cache:'no-store',mode:'cors'});
-       if(fresh&&fresh.ok)await cache.put(req,fresh.clone());
-       return fresh;
-     }catch(e){
-       return (await cache.match(req)) || Response.error();
-     }
-   })());
-   return;
- }
-
- // Navigation is network-first so GitHub updates actually appear.
- if(req.mode==='navigate' || req.destination==='document'){
-   event.respondWith((async()=>{
-     const cache=await caches.open(CACHE);
      try{
        const fresh=await fetch(req,{cache:'no-store'});
-       if(fresh&&fresh.ok)await cache.put('./index.html',fresh.clone());
+       const cache=await caches.open(CACHE);
+       cache.put('./index.html',fresh.clone()).catch(()=>{});
        return fresh;
      }catch(e){
-       return (await cache.match('./index.html')) ||
-              (await cache.match('./')) ||
-              Response.error();
+       return (await caches.match('./index.html')) || (await caches.match('./')) || Response.error();
      }
    })());
    return;
  }
 
- // Other app assets are cache-first.
+ // Static assets: cache-first, then network and refresh cache.
  event.respondWith((async()=>{
-   const cache=await caches.open(CACHE);
-   const cached=await cache.match(req);
+   const cached=await caches.match(req);
    if(cached)return cached;
    try{
      const fresh=await fetch(req);
-     if(fresh&&fresh.ok)await cache.put(req,fresh.clone());
+     const cache=await caches.open(CACHE);
+     cache.put(req,fresh.clone()).catch(()=>{});
      return fresh;
    }catch(e){
      return Response.error();
