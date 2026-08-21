@@ -308,6 +308,7 @@ if('serviceWorker' in navigator){
 <div id="cloudSyncHeader" class="small muted" style="margin-top:4px">☁ Sync: starting…</div>
 <div id="offlineRegistryStatus" class="small muted" style="margin-top:4px">📥 Offline registry: checking…</div>
 <div id="offlineUploadStatus" class="small muted" style="margin-top:4px">⬆ Offline upload queue: checking…</div>
+<div id="offlineOcrStatus" class="small muted" style="margin-top:4px">OCR offline cache: checking…</div>
 
 <div class="tabs">
 <button class="tab active" onclick="showTab('lookup',this)">Lookup</button>
@@ -737,6 +738,7 @@ function unlockApp(){
 
 
 document.addEventListener('DOMContentLoaded',()=>{
+ warmOfflineOcr();
  showOfflineUploadStatus();
  showOfflineRegistryStatus();
  const btn=document.getElementById('lockBtn');
@@ -2001,6 +2003,41 @@ function showOfflineUploadStatus(){
  }
 }
 
+
+const OFFLINE_OCR_ASSETS=[
+ './ocr/worker.min.js',
+ './ocr/core/tesseract-core.wasm.js',
+ './ocr/core/tesseract-core-simd.wasm.js',
+ './ocr/core/tesseract-core-lstm.wasm.js',
+ './ocr/core/tesseract-core-simd-lstm.wasm.js',
+ './ocr/lang/eng.traineddata.gz'
+];
+
+async function warmOfflineOcr(){
+ const el=document.getElementById('offlineOcrStatus');
+ if(!('serviceWorker' in navigator)){
+   if(el)el.textContent='OCR offline cache unavailable in this browser.';
+   return;
+ }
+ try{
+   await navigator.serviceWorker.ready;
+   if(el)el.textContent=navigator.onLine?'Preparing offline scanner…':'Offline scanner using saved OCR files.';
+   if(navigator.onLine){
+     const results=await Promise.allSettled(
+       OFFLINE_OCR_ASSETS.map(u=>fetch(u,{cache:'reload'}))
+     );
+     const good=results.filter(x=>x.status==='fulfilled'&&x.value&&x.value.ok).length;
+     if(el)el.textContent=good===OFFLINE_OCR_ASSETS.length
+       ? 'Offline scanner ready ✓'
+       : `Offline scanner preparing (${good}/${OFFLINE_OCR_ASSETS.length})`;
+   }else{
+     if(el)el.textContent='Offline scanner ready from local cache';
+   }
+ }catch(e){
+   if(el)el.textContent=navigator.onLine?'Offline scanner cache could not finish':'Offline scanner using available local files';
+ }
+}
+
 const CLOUD_SYNC_STATE_KEY='towerRegistryCloudSyncState_v34';
 const CLOUD_SYNC_DEVICE_KEY='towerRegistryCloudDeviceId_v34';
 const CLOUD_SYNC_PIN_KEY='towerRegistryCloudPin_v34';
@@ -2169,7 +2206,7 @@ async function cloudSyncNow(force=false){
    cloudSyncBusy=false;
  }
 }
-window.addEventListener('online',()=>{showOfflineUploadStatus();cloudSyncNow(true)});
+window.addEventListener('online',()=>{showOfflineUploadStatus();warmOfflineOcr();cloudSyncNow(true)});
 window.addEventListener('offline',()=>{setCloudSyncStatus('☁ Offline • changes saved locally');showOfflineUploadStatus()});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')cloudSyncNow(false)});
 document.addEventListener('DOMContentLoaded',()=>{
@@ -3310,22 +3347,33 @@ function mergeBandIntoList(existing,band,radio){
 }
 
 function findExistingScanTower(carrier,radio,sid){
- const id=String(sid||'').trim();
+ const id=String(sid||'').replace(/\D/g,'');
+ const wantRadio=String(radio||'').trim().toUpperCase();
+ const wantCarrier=String(carrier||'').trim().toLowerCase();
  if(!id || !DB || !Array.isArray(DB.records))return null;
 
- // Preferred match: carrier + radio + tower ID.
+ const carrierEquivalent=(a,b)=>{
+   a=String(a||'').trim().toLowerCase();
+   b=String(b||'').trim().toLowerCase();
+   if(a===b)return true;
+   if((a==='strata'||a==='strata networks')&&(b==='strata'||b==='strata networks'))return true;
+   if((a==='t-mobile'||a==='tmobile')&&(b==='t-mobile'||b==='tmobile'))return true;
+   if((a==='union wireless'||a==='union')&&(b==='union wireless'||b==='union'))return true;
+   return false;
+ };
+
+ // Primary local match: normalized carrier + radio + tower ID.
  let rec=DB.records.find(r=>
-   String(r.carrier||'')===String(carrier||'') &&
-   String(r.radio||'')===String(radio||'') &&
-   String(r.eNB||r.gNB||'')===id
+   carrierEquivalent(r.carrier,wantCarrier) &&
+   String(r.radio||'').trim().toUpperCase()===wantRadio &&
+   String(r.eNB||r.gNB||'').replace(/\D/g,'')===id
  );
  if(rec)return rec;
 
- // If an older/minimal record was saved without useful carrier metadata,
- // allow an ID-only fallback ONLY when it is unique for this radio type.
+ // Fallback: ID-only is safe only when unique for this radio.
  const matches=DB.records.filter(r=>
-   String(r.radio||'')===String(radio||'') &&
-   String(r.eNB||r.gNB||'')===id
+   String(r.radio||'').trim().toUpperCase()===wantRadio &&
+   String(r.eNB||r.gNB||'').replace(/\D/g,'')===id
  );
  return matches.length===1 ? matches[0] : null;
 }
@@ -3579,6 +3627,28 @@ function identifyFromScan(fields){
  const carrier=DB.plmns[plmn]||'Unknown';
 
  const rec=findExistingScanTower(carrier,radio,sid);
+
+ // Current 45: once the downloaded/local registry matches, propagate that
+ // authoritative record into both the scan object and the visible edit fields.
+ if(rec){
+   fields.site=rec.site||fields.site||'';
+   fields.carrier=rec.carrier||fields.carrier||carrier;
+   fields.plmn=rec.plmn||fields.plmn||plmn;
+   fields.radio=rec.radio||fields.radio||radio;
+   if(rec.radio==='LTE'){
+     fields.sid=String(rec.eNB||fields.sid||'');
+     fields.eNB=String(rec.eNB||fields.eNB||'');
+   }else if(rec.radio==='5G'){
+     fields.sid=String(rec.gNB||fields.sid||'');
+     fields.gNB=String(rec.gNB||fields.gNB||'');
+   }
+   const siteField=document.getElementById('sSite');
+   if(siteField)siteField.value=fields.site||'';
+   const idField=document.getElementById('sId');
+   if(idField)idField.value=fields.sid||'';
+   const radioField=document.getElementById('sRadio');
+   if(radioField)radioField.value=fields.radio||radio;
+ }
 
  // v80: existing tower + newly observed band = automatically enrich the saved record.
  // This never creates a new tower; it only adds a band to an already-matched tower.
@@ -5975,13 +6045,21 @@ async function pasteScanImage(){
 runOcrBtn.addEventListener('click',async()=>{
  const f=scanImage.files&&scanImage.files[0];
  if(!f){document.getElementById('ocrStatus').textContent='Choose a screenshot first.';return;}
- if(!window.Tesseract){document.getElementById('ocrStatus').textContent='OCR engine did not load.';return;}
+ if(!window.Tesseract){
+   document.getElementById('ocrStatus').textContent=navigator.onLine
+     ? 'OCR engine did not load.'
+     : 'Offline OCR engine is not cached yet. Open the app once with internet so it can finish downloading the scanner.';
+   return;
+ }
  runOcrBtn.disabled=true;
  document.getElementById('scanIdentity').innerHTML='';
  try{
    document.getElementById('ocrStatus').textContent='Scanning and autofilling fields…';
    const enhanced=await makeEnhancedImage(f);
    const r1=await Tesseract.recognize(enhanced,'eng',{
+     workerPath:'./ocr/worker.min.js',
+     corePath:'./ocr/core/',
+     langPath:'./ocr/lang/',
      logger:m=>{if(m.status==='recognizing text')document.getElementById('ocrStatus').textContent=`Enhanced scan ${Math.round((m.progress||0)*100)}%…`;}
    },{blocks:true,tsv:true});
    const d1=r1?.data||{};
@@ -5991,6 +6069,9 @@ runOcrBtn.addEventListener('click',async()=>{
 
    // Always do a second pass on the original. Merge whichever pass reads each row best.
    const r2=await Tesseract.recognize(f,'eng',{
+     workerPath:'./ocr/worker.min.js',
+     corePath:'./ocr/core/',
+     langPath:'./ocr/lang/',
      logger:m=>{if(m.status==='recognizing text')document.getElementById('ocrStatus').textContent=`Original scan ${Math.round((m.progress||0)*100)}%…`;}
    },{blocks:true,tsv:true});
    const d2=r2?.data||{};
@@ -6010,7 +6091,10 @@ runOcrBtn.addEventListener('click',async()=>{
      document.getElementById('ocrStatus').textContent='Autofill completed, but OCR still missed: '+miss.join(', ')+'.';
    }
  }catch(e){
-   document.getElementById('ocrStatus').textContent='OCR failed on this image.';
+   const msg=String(e&&e.message||e||'').replace(/\s+/g,' ').slice(0,100);
+   document.getElementById('ocrStatus').textContent=navigator.onLine
+     ? `OCR failed on this image${msg?': '+msg:''}.`
+     : `Offline OCR could not complete${msg?': '+msg:''}.`;
  }
  runOcrBtn.disabled=false;
 });
@@ -6020,7 +6104,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 44';
+  const BUILD='Current 45';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
