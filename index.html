@@ -48,7 +48,7 @@ document.addEventListener('click',e=>{
 });
 
 </script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" crossorigin="anonymous"></script>
 <title>Master Cellular Tower Registry</title>
 <style>
 :root{color-scheme:dark}
@@ -292,7 +292,7 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <div id="cloudSyncHeader" class="small muted" style="margin-top:4px">☁ Sync: starting…</div>
 <div id="offlineRegistryStatus" class="small muted" style="margin-top:4px">📥 Offline registry: checking…</div>
 <div id="offlineUploadStatus" class="small muted" style="margin-top:4px">⬆ Offline upload queue: checking…</div>
-<div id="offlineOcrStatus" class="small muted" style="margin-top:4px">OCR offline cache: checking…</div>
+
 
 <div class="tabs">
 <button class="tab active" onclick="showTab('lookup',this)">Lookup</button>
@@ -302,7 +302,7 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <button class="tab" onclick="showTab('add',this)">Add/Edit</button>
 </div>
 <div id="workBranchBanner" style="margin:8px 0 12px;padding:8px 12px;border:1px solid #475569;border-radius:10px;background:#111827;font-size:13px">
-  <b>CURRENT 10:</b> CellMapper and Backup removed.
+  <b>CURRENT 51:</b> True cached offline OCR • Automatic cloud sync preserved • No CellMapper.
 </div>
 
 <div id="pendingChangesBar" class="card hidden" style="position:sticky;top:58px;z-index:8;border-color:#7c5f16">
@@ -722,7 +722,7 @@ function unlockApp(){
 
 
 document.addEventListener('DOMContentLoaded',()=>{
- setTimeout(()=>warmOfflineOcr().catch(()=>{}),1200);
+ 
  showOfflineUploadStatus();
  showOfflineRegistryStatus();
  const btn=document.getElementById('lockBtn');
@@ -1988,78 +1988,49 @@ function showOfflineUploadStatus(){
 }
 
 
+// Current 51 keeps the OCR runtime in the app's Service Worker cache.
+// After one successful online setup, these exact version-pinned resources are
+// served from CacheStorage even with no data/Wi-Fi connection.
 const OFFLINE_OCR_ASSETS=[
- './ocr/worker.min.js',
- './ocr/core/tesseract-core.wasm.js',
- './ocr/core/tesseract-core-simd.wasm.js',
- './ocr/core/tesseract-core-lstm.wasm.js',
- './ocr/core/tesseract-core-simd-lstm.wasm.js',
- './ocr/lang/eng.traineddata.gz'
+ 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js',
+ 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',
+ 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1/tesseract-core-lstm.wasm.js',
+ 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int/eng.traineddata.gz'
 ];
+
+async function offlineOcrCachedCount(){
+ if(!('caches' in window))return 0;
+ let n=0;
+ for(const url of OFFLINE_OCR_ASSETS){
+   try{ if(await caches.match(url))n++; }catch(e){}
+ }
+ return n;
+}
 
 async function warmOfflineOcr(){
  const el=document.getElementById('offlineOcrStatus');
- const localUrls=[
-   './ocr/worker.min.js',
-   './ocr/core/tesseract-core.wasm.js',
-   './ocr/core/tesseract-core-simd.wasm.js',
-   './ocr/core/tesseract-core-lstm.wasm.js',
-   './ocr/core/tesseract-core-simd-lstm.wasm.js',
-   './ocr/lang/eng.traineddata.gz'
- ];
- const mainUrl='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
-
- if(!('serviceWorker' in navigator)){
-   if(el)el.textContent='Offline scanner unavailable: service worker not supported';
-   return false;
- }
-
- try{
-   const reg=await registerTowerServiceWorker();
-   if(!reg){
-     if(el)el.textContent='Offline scanner setup error: service worker registration failed';
-     return false;
-   }
-
-   if(el)el.textContent=navigator.onLine
-     ? 'Preparing offline scanner…'
-     : 'Checking offline scanner files…';
-
-   let good=0;
-   const total=localUrls.length+1;
-
-   try{
-     const r=await fetch(mainUrl,{cache:'no-store',mode:'cors'});
-     if(r.ok)good++;
-   }catch(e){}
-
-   for(const rel of localUrls){
+ try{ await registerTowerServiceWorker(); }catch(e){}
+ let have=await offlineOcrCachedCount();
+ if(navigator.onLine && have<OFFLINE_OCR_ASSETS.length){
+   if(el)el.textContent=`Preparing offline scanner… ${have}/${OFFLINE_OCR_ASSETS.length}`;
+   for(const url of OFFLINE_OCR_ASSETS){
      try{
-       const r=await fetch(new URL(rel,location.href).href,{cache:'no-store'});
-       if(r.ok){
-         good++;
-         await r.arrayBuffer();
-       }
+       if(await caches.match(url))continue;
+       await fetch(url,{cache:'reload'});
      }catch(e){}
+     have=await offlineOcrCachedCount();
+     if(el)el.textContent=`Preparing offline scanner… ${have}/${OFFLINE_OCR_ASSETS.length}`;
    }
-
-   if(good===total){
-     localStorage.setItem('towerOfflineOcrReady_v48','1');
-     if(el)el.textContent='Offline scanner ready ✓';
-     return true;
-   }
-
-   if(!navigator.onLine && localStorage.getItem('towerOfflineOcrReady_v48')==='1'){
-     if(el)el.textContent='Offline scanner ready ✓';
-     return true;
-   }
-
-   if(el)el.textContent=`Offline scanner preparing (${good}/${total})`;
-   return false;
- }catch(e){
-   if(el)el.textContent='Offline scanner setup error: '+String(e&&e.message||e).slice(0,90);
-   return false;
  }
+ have=await offlineOcrCachedCount();
+ const complete=have===OFFLINE_OCR_ASSETS.length;
+ if(el){
+   if(complete && window.Tesseract)el.textContent=`Offline scanner ready ✓ (${have}/${OFFLINE_OCR_ASSETS.length})`;
+   else if(complete)el.textContent=`Offline OCR files ready ✓ (${have}/${OFFLINE_OCR_ASSETS.length}) • reload app once`;
+   else if(navigator.onLine)el.textContent=`Offline scanner setup incomplete: ${have}/${OFFLINE_OCR_ASSETS.length}`;
+   else el.textContent=`App offline • OCR cache incomplete: ${have}/${OFFLINE_OCR_ASSETS.length}`;
+ }
+ return complete && !!window.Tesseract;
 }
 
 const CLOUD_SYNC_STATE_KEY='towerRegistryCloudSyncState_v34';
@@ -6067,18 +6038,13 @@ async function pasteScanImage(){
 }
 
 runOcrBtn.addEventListener('click',async()=>{
- const offlineReady=await warmOfflineOcr();
- if(!offlineReady && !navigator.onLine){
-   document.getElementById('ocrStatus').textContent='Offline scanner is not fully cached yet. Connect once, wait for “Offline scanner ready ✓”, then it will work without service.';
-   return;
- }
 
  const f=scanImage.files&&scanImage.files[0];
  if(!f){document.getElementById('ocrStatus').textContent='Choose a screenshot first.';return;}
  if(!window.Tesseract){
    document.getElementById('ocrStatus').textContent=navigator.onLine
      ? 'OCR engine did not load.'
-     : 'Offline OCR engine is not cached yet. Open the app once with internet so it can finish downloading the scanner.';
+     : 'Offline OCR cache is incomplete. Reconnect once and wait for “Offline scanner ready ✓”, then scanning will work offline.';
    return;
  }
  runOcrBtn.disabled=true;
@@ -6086,10 +6052,17 @@ runOcrBtn.addEventListener('click',async()=>{
  try{
    document.getElementById('ocrStatus').textContent='Scanning and autofilling fields…';
    const enhanced=await makeEnhancedImage(f);
+   // Current 51 pins the OCR runtime to the same URLs pre-cached by sw.js.
+   // The non-SIMD LSTM core is intentionally selected for broad Safari/iPhone
+   // compatibility. Once cached, every request below is satisfied offline.
+   const OCR_REMOTE={
+     workerPath:'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',
+     corePath:'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1/tesseract-core-lstm.wasm.js',
+     langPath:'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int',
+     gzip:true
+   };
    const r1=await Tesseract.recognize(enhanced,'eng',{
-     workerPath:new URL('./ocr/worker.min.js',location.href).href,
-     corePath:new URL('./ocr/core/',location.href).href,
-     langPath:new URL('./ocr/lang/',location.href).href,
+     ...OCR_REMOTE,
      logger:m=>{if(m.status==='recognizing text')document.getElementById('ocrStatus').textContent=`Enhanced scan ${Math.round((m.progress||0)*100)}%…`;}
    },{blocks:true,tsv:true});
    const d1=r1?.data||{};
@@ -6099,9 +6072,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
    // Always do a second pass on the original. Merge whichever pass reads each row best.
    const r2=await Tesseract.recognize(f,'eng',{
-     workerPath:new URL('./ocr/worker.min.js',location.href).href,
-     corePath:new URL('./ocr/core/',location.href).href,
-     langPath:new URL('./ocr/lang/',location.href).href,
+     ...OCR_REMOTE,
      logger:m=>{if(m.status==='recognizing text')document.getElementById('ocrStatus').textContent=`Original scan ${Math.round((m.progress||0)*100)}%…`;}
    },{blocks:true,tsv:true});
    const d2=r2?.data||{};
@@ -6134,17 +6105,14 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 48';
+  const BUILD='Current 51';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
     try{
-      if('caches' in window){
-        const names=await caches.keys();
-        await Promise.all(names.map(n=>{
-          if(!n.includes(BUILD)) return caches.delete(n);
-        }));
-      }
+      // Do not delete CacheStorage here. Current 50 accidentally deleted its
+      // own active cache because its BUILD label did not match the SW cache name.
+      // sw.js now performs version migration safely during activation.
 
       // Ask an old service worker to step aside. This does NOT clear localStorage,
       // so saved registry data/PIN trust/backend URL remain untouched.
@@ -6155,9 +6123,9 @@ runOcrBtn.addEventListener('click',async()=>{
         }
       }
 
-      const seen=sessionStorage.getItem(KEY);
+      const seen=localStorage.getItem(KEY);
       if(seen!==BUILD){
-        sessionStorage.setItem(KEY,BUILD);
+        localStorage.setItem(KEY,BUILD);
         // One cache-busted reload so GitHub Pages/Safari requests fresh HTML/assets.
         const u=new URL(location.href);
         u.searchParams.set('build',BUILD);
