@@ -1,4 +1,4 @@
-Master Cellular Tower Registry v88
-Updated in place from v87.
-Signal ratings now use the supplied RF Connectivity chart's four levels: Excellent, Good, Medium, Weak.
-Overall signal combines available RSRP/RSRQ/SINR grades so one weak metric does not automatically force the entire connection to Weak.
+Master Tower Registry Current 52
+
+Adds Franklin hotspot diagnostics parsing while preserving true cached offline OCR and automatic two-way cloud sync.
+Franklin fields are parsed by nearest label/value pairing so Band, Band Width, RSRP, RSRQ, SNR, PLMN, and Cell ID stay in the correct columns.

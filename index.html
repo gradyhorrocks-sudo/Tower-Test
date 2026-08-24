@@ -302,7 +302,7 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <button class="tab" onclick="showTab('add',this)">Add/Edit</button>
 </div>
 <div id="workBranchBanner" style="margin:8px 0 12px;padding:8px 12px;border:1px solid #475569;border-radius:10px;background:#111827;font-size:13px">
-  <b>CURRENT 51:</b> True cached offline OCR • Automatic cloud sync preserved • No CellMapper.
+  <b>CURRENT 52:</b> Franklin hotspot parser • True cached offline OCR • Automatic cloud sync preserved • No CellMapper.
 </div>
 
 <div id="pendingChangesBar" class="card hidden" style="position:sticky;top:58px;z-index:8;border-color:#7c5f16">
@@ -1988,7 +1988,7 @@ function showOfflineUploadStatus(){
 }
 
 
-// Current 51 keeps the OCR runtime in the app's Service Worker cache.
+// Current 52 keeps the OCR runtime in the app's Service Worker cache.
 // After one successful online setup, these exact version-pinned resources are
 // served from CacheStorage even with no data/Wi-Fi connection.
 const OFFLINE_OCR_ASSETS=[
@@ -4019,6 +4019,133 @@ function extractHotspotLteDiagnostics(text){
  };
  return out;
 }
+
+// FRANKLIN HOTSPOT DIAGNOSTICS
+// Franklin hotspot debug pages use a two-pair table layout on each row, e.g.
+//   RSRQ | -10 | SNR | 6.6
+// A generic "take the far-right number" OCR parser can swap those values.
+// This parser intentionally takes the NEAREST value to each Franklin label.
+function nearestAcrossFromLabel(rows,labelRegex,valueRegex){
+ for(const row of (rows||[])){
+   const words=row.words||[];
+   let labelEnd=-1;
+   for(let i=0;i<words.length;i++){
+     let phrase='';
+     for(let j=i;j<Math.min(words.length,i+5);j++){
+       phrase=(phrase+' '+words[j].text).trim();
+       labelRegex.lastIndex=0;
+       if(labelRegex.test(phrase)){
+         labelEnd=words[j].bbox.x1;
+         break;
+       }
+     }
+     if(labelEnd>=0)break;
+   }
+   if(labelEnd<0)continue;
+
+   const right=words.filter(w=>w.bbox.x0>labelEnd+4).sort((a,b)=>a.bbox.x0-b.bbox.x0);
+   // Start at the nearest word and allow a few adjacent words because OCR may
+   // split values such as "Band 4", "15 MHz", or "310 260".
+   for(let start=0;start<Math.min(4,right.length);start++){
+     for(let take=1;take<=Math.min(4,right.length-start);take++){
+       const candidate=right.slice(start,start+take).map(w=>w.text).join(' ');
+       const m=candidate.match(valueRegex);
+       if(m&&m[1])return m[1].trim();
+     }
+   }
+ }
+ return '';
+}
+
+function looksLikeFranklinDiagnostics(text){
+ const t=String(text||'');
+ // Require multiple Franklin-specific labels so another hotspot page is not
+ // accidentally forced through this parser.
+ const clues=[
+   /\bPLMN\s*Selected\b/i,
+   /\bDL\s*Channel\b/i,
+   /\bUL\s*Channel\b/i,
+   /\bLast\s*Error\s*Code\b/i,
+   /\bPower\s*Mode\b/i,
+   /\bTx\s*Power\b/i
+ ];
+ return clues.filter(r=>r.test(t)).length>=2 && /\bLTE\b/i.test(t);
+}
+
+function extractFranklinDiagnosticsSpatial(ocrData){
+ const text=String(ocrData?.text||'');
+ if(!looksLikeFranklinDiagnostics(text))return {};
+ const rows=wordsToRows(extractOcrWords(ocrData));
+ const near=(label,value)=>nearestAcrossFromLabel(rows,label,value);
+
+ let plmn=near(/PLMN\s*Selected/i,/(\d{3}\s*\d{2,3}|\d{5,6})\b/).replace(/\s+/g,'');
+ if(!plmn){
+   const mcc=near(/^MCC$/i,/(\d{3})\b/);
+   const mnc=near(/^MNC$/i,/(\d{2,3})\b/);
+   if(mcc&&mnc)plmn=mcc+mnc;
+ }
+
+ // Franklin often shows Cell ID as "432(24653827)". The value in
+ // parentheses is the LTE ECI we need for eNB/sector math.
+ let cell=near(/Cell\s*ID/i,/\(\s*([0-9OoIl|]{5,12})\s*\)/i);
+ if(!cell)cell=near(/Cell\s*ID/i,/\b([0-9OoIl|]{5,12})\b/i);
+ cell=normalizeNum(cell);
+
+ let band=near(/^Band$/i,/(?:Band\s*)?([0-9OoIl|]{1,3})\b/i);
+ band=normalizeNum(band);
+ if(band)band='B'+band;
+
+ let bw=near(/Band\s*Width/i,/(\d{1,3}\s*MHz)\b/i);
+ if(!bw)bw=near(/Band\s*Width/i,/(\d{1,3}\s*MHz?)/i);
+ bw=String(bw||'').replace(/\s+/g,' ').replace(/(\d)(MHz)/i,'$1 $2');
+
+ const rsrp=near(/^RSRP$/i,/(-?\s*\d{2,3}(?:\.\d+)?)/i).replace(/\s+/g,'');
+ const rsrq=near(/^RSRQ$/i,/(-?\s*\d{1,3}(?:\.\d+)?)/i).replace(/\s+/g,'');
+ const snr=near(/^SNR$/i,/(-?\s*\d{1,3}(?:\.\d+)?)/i).replace(/\s+/g,'');
+
+ let sid='',local='';
+ if(cell){
+   try{const n=BigInt(cell);sid=(n/256n).toString();local=(n%256n).toString();}catch(e){}
+ }
+ return {_franklinFormat:true,radio:'LTE',plmn,cell,sid,local,band,bw,rsrp,rsrq,snr};
+}
+
+function extractFranklinDiagnosticsText(text){
+ const t=String(text||'').replace(/\r/g,'');
+ if(!looksLikeFranklinDiagnostics(t))return {};
+ const one=(re)=>{const m=t.match(re);return m&&m[1]?m[1].trim():'';};
+
+ let plmn=one(/PLMN\s*Selected\s*[:#=-]?\s*(\d{3}\s*\d{2,3}|\d{5,6})\b/i).replace(/\s+/g,'');
+ if(!plmn){
+   const mcc=one(/\bMCC\s*[:#=-]?\s*(\d{3})\b/i);
+   const mnc=one(/\bMNC\s*[:#=-]?\s*(\d{2,3})\b/i);
+   if(mcc&&mnc)plmn=mcc+mnc;
+ }
+ let cell=one(/Cell\s*ID\s*[:#=-]?\s*[^\n\r]*?\(\s*([0-9OoIl|]{5,12})\s*\)/i);
+ if(!cell)cell=one(/Cell\s*ID\s*[:#=-]?\s*([0-9OoIl|]{5,12})\b/i);
+ cell=normalizeNum(cell);
+
+ let band=normalizeNum(one(/(?:^|\n)\s*Band\s+(?:Band\s*)?([0-9OoIl|]{1,3})\b/im));
+ if(band)band='B'+band;
+ let bw=one(/Band\s*Width\s*[:#=-]?\s*(\d{1,3}\s*MHz)\b/i).replace(/\s+/g,' ');
+ const rsrp=one(/\bRSRP\s*[:#=-]?\s*(-?\s*\d{2,3}(?:\.\d+)?)/i).replace(/\s+/g,'');
+ const rsrq=one(/\bRSRQ\s*[:#=-]?\s*(-?\s*\d{1,3}(?:\.\d+)?)/i).replace(/\s+/g,'');
+ const snr=one(/\bSNR\s*[:#=-]?\s*(-?\s*\d{1,3}(?:\.\d+)?)/i).replace(/\s+/g,'');
+ let sid='',local='';
+ if(cell){try{const n=BigInt(cell);sid=(n/256n).toString();local=(n%256n).toString();}catch(e){}}
+ return {_franklinFormat:true,radio:'LTE',plmn,cell,sid,local,band,bw,rsrp,rsrq,snr};
+}
+
+function applyFranklinOverrides(base,franklin){
+ if(!franklin||!franklin._franklinFormat)return base;
+ const x={...base,_franklinFormat:true,radio:'LTE'};
+ // Franklin's label-bound parser is more authoritative than the generic parser.
+ for(const k of ['plmn','cell','sid','local','band','bw','rsrp','rsrq','snr']){
+   if(String(franklin[k]??'').trim()!=='')x[k]=franklin[k];
+ }
+ return x;
+}
+
 function extractDiagnosticTextLines(text){
  const lines=String(text||'').replace(/\r/g,'').split('\n').map(x=>x.trim()).filter(Boolean);
  const out={plmn:'',radio:'',cell:'',band:'',bw:'',pci:'',tac:'',rsrp:'',rsrq:'',snr:''};
@@ -6052,7 +6179,7 @@ runOcrBtn.addEventListener('click',async()=>{
  try{
    document.getElementById('ocrStatus').textContent='Scanning and autofilling fields…';
    const enhanced=await makeEnhancedImage(f);
-   // Current 51 pins the OCR runtime to the same URLs pre-cached by sw.js.
+   // Current 52 pins the OCR runtime to the same URLs pre-cached by sw.js.
    // The non-SIMD LSTM core is intentionally selected for broad Safari/iPhone
    // compatibility. Once cached, every request below is satisfied offline.
    const OCR_REMOTE={
@@ -6068,6 +6195,8 @@ runOcrBtn.addEventListener('click',async()=>{
    const d1=r1?.data||{};
    let fields=mergeScanFields(extractScanFieldsSpatial(d1),extractDiagnosticTextLines(d1.text||''));
    fields=mergeScanFields(fields,extractHotspotLteDiagnostics(d1.text||''));
+   fields=applyFranklinOverrides(fields,extractFranklinDiagnosticsText(d1.text||''));
+   fields=applyFranklinOverrides(fields,extractFranklinDiagnosticsSpatial(d1));
    let dualSpatial=extractDualRadioSpatial(d1);
 
    // Always do a second pass on the original. Merge whichever pass reads each row best.
@@ -6079,6 +6208,8 @@ runOcrBtn.addEventListener('click',async()=>{
    fields=mergeScanFields(fields,extractScanFieldsSpatial(d2));
    fields=mergeScanFields(fields,extractDiagnosticTextLines(d2.text||''));
    fields=mergeScanFields(fields,extractHotspotLteDiagnostics(d2.text||''));
+   fields=applyFranklinOverrides(fields,extractFranklinDiagnosticsText(d2.text||''));
+   fields=applyFranklinOverrides(fields,extractFranklinDiagnosticsSpatial(d2));
    dualSpatial=mergeDualRadioStats(dualSpatial,extractDualRadioSpatial(d2));
    fields._dualRadioSpatial=dualSpatial;
 
@@ -6105,7 +6236,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 51';
+  const BUILD='Current 52';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
