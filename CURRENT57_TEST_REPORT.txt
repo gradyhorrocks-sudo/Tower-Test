@@ -1,0 +1,19 @@
+CURRENT 57 DEEP AUDIT / REGRESSION REPORT
+
+Root cause found:
+- In the final identifyFromScan() implementation, the early incomplete-identifier 5G render path referenced `rec` before `const rec` was initialized later in the same function.
+- That is a JavaScript temporal-dead-zone error and exactly matches: Cannot access 'rec' before initialization.
+
+Fix:
+- Replaced the premature `!rec` check with `!fields._resolvedRecord`, which is initialized before that branch and expresses the intended condition.
+- No registry data, cloud-sync logic, OCR parser, Franklin parser, Cell-ID math, or roaming-warning behavior was changed.
+- Service-worker cache name bumped from Current 56 to Current 57.
+
+Tests passed:
+1. Every inline JavaScript block passed node --check.
+2. Service worker passed node --check.
+3. Exact former crash path was reproduced in a test harness: 5G + Cell ID + no PLMN + no registry record. It now renders without a TDZ exception.
+4. Registry-resolved path also executes and renders the matched record.
+5. registry.json is byte-for-byte unchanged from Current 56.
+6. Diff audit confirms only the Current banner, the single TDZ fix, and service-worker cache version changed.
+7. ZIP integrity passed.

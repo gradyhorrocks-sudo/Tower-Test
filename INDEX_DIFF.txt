@@ -1,0 +1,20 @@
+--- /mnt/data/c56audit/index.html	2026-08-24 05:56:36.000000000 +0000
++++ /mnt/data/current57_build/index.html	2026-08-24 06:03:11.372699598 +0000
+@@ -302,7 +302,7 @@
+ <button class="tab" onclick="showTab('add',this)">Add/Edit</button>
+ </div>
+ <div id="workBranchBanner" style="margin:8px 0 12px;padding:8px 12px;border:1px solid #475569;border-radius:10px;background:#111827;font-size:13px">
+-  <b>CURRENT 56:</b> Roaming-aware registry mismatch warnings • Cell ID registry identity priority • Franklin parser lock • Cached offline OCR • Automatic cloud sync preserved • No CellMapper.
++  <b>CURRENT 57:</b> TDZ crash fix • Roaming-aware registry warnings • Cell ID registry identity priority • Franklin parser lock • Cached offline OCR • Automatic cloud sync preserved • No CellMapper.
+ </div>
+ 
+ <div id="pendingChangesBar" class="card hidden" style="position:sticky;top:58px;z-index:8;border-color:#7c5f16">
+@@ -5665,7 +5665,7 @@
+     ${directKnownLteNoticeFromRaw(fields,fields._ocrText||'')}
+     ${companionRadioNotice(fields,fields._ocrText||'')}
+     ${knownLteAnchorNotice(fields,fields._ocrText||'')}
+- ${radio==='5G'&&!rec?knownLteSiteSummary(fields,fields._ocrText||''):''}
++ ${radio==='5G'&&!fields._resolvedRecord?knownLteSiteSummary(fields,fields._ocrText||''):''}
+    </div>`;
+    return;
+  }
