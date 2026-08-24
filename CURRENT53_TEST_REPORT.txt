@@ -1,0 +1,15 @@
+Current 53 regression checks
+
+Franklin screenshot fixture 1:
+PLMN 310260; LTE B4; 15 MHz; Cell ID 24653827; eNB 96304; sector 3; RSRP -109; RSRQ -10; SNR 6.6 — PASS.
+
+Franklin screenshot fixture 2:
+PLMN 310260; LTE B2; 10 MHz; Cell ID 24653837; eNB 96304; sector 13; RSRP -115; RSRQ -12; SNR 3.6 — PASS.
+
+Checks performed:
+- JavaScript syntax check with Node — PASS.
+- Franklin spatial parser unit test — PASS for both supplied screenshot layouts.
+- Final Franklin override test against deliberately wrong generic values (B0 / SNR copied into RSRQ) — PASS.
+- registry.json SHA-256 unchanged from Current 52 — PASS.
+- Cloud sync code region unchanged from Current 52 — PASS.
+- Offline OCR asset URLs unchanged; only Service Worker cache version bumped — PASS.

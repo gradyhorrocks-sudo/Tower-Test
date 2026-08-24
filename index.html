@@ -302,7 +302,7 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <button class="tab" onclick="showTab('add',this)">Add/Edit</button>
 </div>
 <div id="workBranchBanner" style="margin:8px 0 12px;padding:8px 12px;border:1px solid #475569;border-radius:10px;background:#111827;font-size:13px">
-  <b>CURRENT 52:</b> Franklin hotspot parser • True cached offline OCR • Automatic cloud sync preserved • No CellMapper.
+  <b>CURRENT 53:</b> Franklin table parser lock • Cached offline OCR • Automatic cloud sync preserved • No CellMapper.
 </div>
 
 <div id="pendingChangesBar" class="card hidden" style="position:sticky;top:58px;z-index:8;border-color:#7c5f16">
@@ -4020,126 +4020,174 @@ function extractHotspotLteDiagnostics(text){
  return out;
 }
 
-// FRANKLIN HOTSPOT DIAGNOSTICS
-// Franklin hotspot debug pages use a two-pair table layout on each row, e.g.
-//   RSRQ | -10 | SNR | 6.6
-// A generic "take the far-right number" OCR parser can swap those values.
-// This parser intentionally takes the NEAREST value to each Franklin label.
-function nearestAcrossFromLabel(rows,labelRegex,valueRegex){
- for(const row of (rows||[])){
-   const words=row.words||[];
-   let labelEnd=-1;
-   for(let i=0;i<words.length;i++){
-     let phrase='';
-     for(let j=i;j<Math.min(words.length,i+5);j++){
-       phrase=(phrase+' '+words[j].text).trim();
-       labelRegex.lastIndex=0;
-       if(labelRegex.test(phrase)){
-         labelEnd=words[j].bbox.x1;
-         break;
-       }
-     }
-     if(labelEnd>=0)break;
-   }
-   if(labelEnd<0)continue;
+// FRANKLIN HOTSPOT DIAGNOSTICS — Current 53
+// Franklin debug pages are a four-column table. Several labels wrap inside
+// their cells ("PLMN Selected", "DL Channel", "Band Width"), so detection
+// MUST NOT depend on those multi-word labels surviving as one OCR text line.
+// We instead detect the stable radio labels and use the closest value to the
+// right, stopping before the next label in that same horizontal OCR band.
 
-   const right=words.filter(w=>w.bbox.x0>labelEnd+4).sort((a,b)=>a.bbox.x0-b.bbox.x0);
-   // Start at the nearest word and allow a few adjacent words because OCR may
-   // split values such as "Band 4", "15 MHz", or "310 260".
-   for(let start=0;start<Math.min(4,right.length);start++){
-     for(let take=1;take<=Math.min(4,right.length-start);take++){
-       const candidate=right.slice(start,start+take).map(w=>w.text).join(' ');
-       const m=candidate.match(valueRegex);
-       if(m&&m[1])return m[1].trim();
+const FRANKLIN_ONE_LINE_LABELS=[
+ /^Technology$/i,/^Connection$/i,/^Band$/i,/^Roaming$/i,
+ /^MCC$/i,/^MNC$/i,/^Cell\s*ID$/i,/^RSSI$/i,/^RSRP$/i,/^RSRQ$/i,/^SNR$/i,
+ /^Tx\s*Power$/i,/^PLMN$/i,/^DL$/i,/^UL$/i,/^Last$/i,/^Error$/i,/^Code$/i,/^Width$/i
+];
+
+function franklinLabelSpan(row,labelRegex){
+ const words=(row?.words||[]);
+ for(let i=0;i<words.length;i++){
+   let phrase='';
+   for(let j=i;j<Math.min(words.length,i+4);j++){
+     phrase=(phrase+' '+String(words[j].text||'')).trim();
+     labelRegex.lastIndex=0;
+     if(labelRegex.test(phrase)){
+       return {i0:i,i1:j,x0:words[i].bbox.x0,x1:words[j].bbox.x1,text:phrase};
      }
    }
+ }
+ return null;
+}
+
+function franklinNextLabelX(row,labelEnd){
+ let stop=Infinity;
+ for(const re of FRANKLIN_ONE_LINE_LABELS){
+   const sp=franklinLabelSpan(row,re);
+   if(sp && sp.x0>labelEnd+3 && sp.x0<stop)stop=sp.x0;
+ }
+ return stop;
+}
+
+function franklinNearestValue(rows,labelRegex,valueRegex,opts={}){
+ for(const row of (rows||[])){
+   const sp=franklinLabelSpan(row,labelRegex);
+   if(!sp)continue;
+   if(opts.requireLabel && !franklinLabelSpan(row,opts.requireLabel))continue;
+
+   const stopX=opts.noStop?Infinity:franklinNextLabelX(row,sp.x1);
+   const vals=(row.words||[]).filter(w=>w.bbox.x0>sp.x1+2 && w.bbox.x0<stopX-2)
+                            .sort((a,b)=>a.bbox.x0-b.bbox.x0);
+   if(!vals.length)continue;
+
+   // Franklin values begin immediately after their label. Test short prefixes
+   // first so a later number in another table cell cannot hijack the field.
+   for(let take=1;take<=Math.min(5,vals.length);take++){
+     const candidate=vals.slice(0,take).map(w=>String(w.text||'')).join(' ')
+       .replace(/[−–—]/g,'-').replace(/\s+/g,' ').trim();
+     const m=candidate.match(valueRegex);
+     if(m&&m[1])return m[1].trim();
+   }
+   const all=vals.map(w=>String(w.text||'')).join(' ')
+     .replace(/[−–—]/g,'-').replace(/\s+/g,' ').trim();
+   const m=all.match(valueRegex);
+   if(m&&m[1])return m[1].trim();
  }
  return '';
 }
 
+function franklinSpatialEvidence(rows){
+ const has=re=>(rows||[]).some(r=>!!franklinLabelSpan(r,re));
+ const core=[/^MCC$/i,/^MNC$/i,/^Cell\s*ID$/i,/^RSSI$/i,/^RSRP$/i,/^RSRQ$/i,/^SNR$/i,/^Roaming$/i,/^Technology$/i];
+ const count=core.filter(has).length;
+ return count>=6 && has(/^Cell\s*ID$/i) && has(/^RSRP$/i) && has(/^RSRQ$/i) && has(/^SNR$/i);
+}
+
 function looksLikeFranklinDiagnostics(text){
  const t=String(text||'');
- // Require multiple Franklin-specific labels so another hotspot page is not
- // accidentally forced through this parser.
- const clues=[
-   /\bPLMN\s*Selected\b/i,
-   /\bDL\s*Channel\b/i,
-   /\bUL\s*Channel\b/i,
-   /\bLast\s*Error\s*Code\b/i,
-   /\bPower\s*Mode\b/i,
-   /\bTx\s*Power\b/i
- ];
- return clues.filter(r=>r.test(t)).length>=2 && /\bLTE\b/i.test(t);
+ // Multi-line table labels are intentionally NOT required here. These tokens
+ // are stable in both Franklin screenshots supplied for testing.
+ const clues=[/\bMCC\b/i,/\bMNC\b/i,/\bCell\s*ID\b/i,/\bRSSI\b/i,/\bRSRP\b/i,/\bRSRQ\b/i,/\bSNR\b/i,/\bRoaming\b/i,/\bTechnology\b/i,/\bTx\s*Power\b/i];
+ return clues.filter(r=>r.test(t)).length>=6 && /\bRSRP\b/i.test(t) && /\bRSRQ\b/i.test(t) && /\bSNR\b/i.test(t);
 }
 
 function extractFranklinDiagnosticsSpatial(ocrData){
- const text=String(ocrData?.text||'');
- if(!looksLikeFranklinDiagnostics(text))return {};
  const rows=wordsToRows(extractOcrWords(ocrData));
- const near=(label,value)=>nearestAcrossFromLabel(rows,label,value);
+ const text=String(ocrData?.text||'');
+ if(!franklinSpatialEvidence(rows) && !looksLikeFranklinDiagnostics(text))return {};
+ const near=(label,value,opts)=>franklinNearestValue(rows,label,value,opts);
 
- let plmn=near(/PLMN\s*Selected/i,/(\d{3}\s*\d{2,3}|\d{5,6})\b/).replace(/\s+/g,'');
- if(!plmn){
-   const mcc=near(/^MCC$/i,/(\d{3})\b/);
-   const mnc=near(/^MNC$/i,/(\d{2,3})\b/);
-   if(mcc&&mnc)plmn=mcc+mnc;
- }
+ // MCC/MNC are much more reliable than the wrapped "PLMN Selected" label.
+ const mcc=near(/^MCC$/i,/(\d{3})\b/);
+ const mnc=near(/^MNC$/i,/(\d{2,3})\b/);
+ let plmn=(mcc&&mnc)?mcc+mnc:'';
+ // Fallback: a row containing the standalone PLMN label and a 5/6-digit value.
+ if(!plmn)plmn=near(/^PLMN$/i,/(\d{5,6}|\d{3}\s*\d{2,3})\b/).replace(/\s+/g,'');
 
- // Franklin often shows Cell ID as "432(24653827)". The value in
- // parentheses is the LTE ECI we need for eNB/sector math.
- let cell=near(/Cell\s*ID/i,/\(\s*([0-9OoIl|]{5,12})\s*\)/i);
- if(!cell)cell=near(/Cell\s*ID/i,/\b([0-9OoIl|]{5,12})\b/i);
+ // Franklin displays Cell ID as local-id(ECI), e.g. 96(24653837).
+ let cell=near(/^Cell\s*ID$/i,/\(\s*([0-9OoIl|]{5,12})\s*\)/i,{requireLabel:/^Tx\s*Power$/i});
+ if(!cell)cell=near(/^Cell\s*ID$/i,/\b([0-9OoIl|]{5,12})\b/i,{requireLabel:/^Tx\s*Power$/i});
+ if(!cell)cell=near(/^Cell\s*ID$/i,/\(\s*([0-9OoIl|]{5,12})\s*\)/i);
  cell=normalizeNum(cell);
 
- let band=near(/^Band$/i,/(?:Band\s*)?([0-9OoIl|]{1,3})\b/i);
+ // The Information table row is: Band | Band 2 | Roaming | 0.
+ // Stop at Roaming so its zero can NEVER become B0.
+ let band=near(/^Band$/i,/(?:Band\s*)?([0-9OoIl|]{1,3})\b/i,{requireLabel:/^Roaming$/i});
  band=normalizeNum(band);
  if(band)band='B'+band;
 
- let bw=near(/Band\s*Width/i,/(\d{1,3}\s*MHz)\b/i);
- if(!bw)bw=near(/Band\s*Width/i,/(\d{1,3}\s*MHz?)/i);
+ // The LTE bottom row wraps "Band Width". On the first baseline Tesseract
+ // normally sees: ... Band | 10MHz. Find a Band label whose value contains MHz.
+ let bw=near(/^Band$/i,/(\d{1,3}\s*MHz)\b/i);
+ if(!bw)bw=near(/^Width$/i,/(\d{1,3}\s*MHz)\b/i);
  bw=String(bw||'').replace(/\s+/g,' ').replace(/(\d)(MHz)/i,'$1 $2');
 
+ // Signal rows are two-pair rows. Bounding each value before the next label is
+ // what prevents SNR from being substituted for RSRQ.
  const rsrp=near(/^RSRP$/i,/(-?\s*\d{2,3}(?:\.\d+)?)/i).replace(/\s+/g,'');
- const rsrq=near(/^RSRQ$/i,/(-?\s*\d{1,3}(?:\.\d+)?)/i).replace(/\s+/g,'');
+ const rsrq=near(/^RSRQ$/i,/(-?\s*\d{1,3}(?:\.\d+)?)/i,{requireLabel:/^SNR$/i}).replace(/\s+/g,'');
  const snr=near(/^SNR$/i,/(-?\s*\d{1,3}(?:\.\d+)?)/i).replace(/\s+/g,'');
 
  let sid='',local='';
- if(cell){
-   try{const n=BigInt(cell);sid=(n/256n).toString();local=(n%256n).toString();}catch(e){}
- }
- return {_franklinFormat:true,radio:'LTE',plmn,cell,sid,local,band,bw,rsrp,rsrq,snr};
+ if(cell){try{const n=BigInt(cell);sid=(n/256n).toString();local=(n%256n).toString();}catch(e){}}
+ const out={_franklinFormat:true,radio:'LTE',plmn,cell,sid,local,band,bw,rsrp,rsrq,snr};
+ out._franklinScore=['plmn','cell','band','bw','rsrp','rsrq','snr'].filter(k=>String(out[k]||'').trim()).length;
+ return out;
 }
 
 function extractFranklinDiagnosticsText(text){
- const t=String(text||'').replace(/\r/g,'');
+ const t=String(text||'').replace(/\r/g,'').replace(/[−–—]/g,'-');
  if(!looksLikeFranklinDiagnostics(t))return {};
  const one=(re)=>{const m=t.match(re);return m&&m[1]?m[1].trim():'';};
 
- let plmn=one(/PLMN\s*Selected\s*[:#=-]?\s*(\d{3}\s*\d{2,3}|\d{5,6})\b/i).replace(/\s+/g,'');
- if(!plmn){
-   const mcc=one(/\bMCC\s*[:#=-]?\s*(\d{3})\b/i);
-   const mnc=one(/\bMNC\s*[:#=-]?\s*(\d{2,3})\b/i);
-   if(mcc&&mnc)plmn=mcc+mnc;
- }
+ const mcc=one(/\bMCC\s*[:#=-]?\s*(\d{3})\b/i);
+ const mnc=one(/\bMNC\s*[:#=-]?\s*(\d{2,3})\b/i);
+ let plmn=(mcc&&mnc)?mcc+mnc:'';
+ if(!plmn)plmn=one(/PLMN(?:\s+Selected)?\s*[:#=-]?\s*(\d{5,6}|\d{3}\s*\d{2,3})\b/i).replace(/\s+/g,'');
+
  let cell=one(/Cell\s*ID\s*[:#=-]?\s*[^\n\r]*?\(\s*([0-9OoIl|]{5,12})\s*\)/i);
- if(!cell)cell=one(/Cell\s*ID\s*[:#=-]?\s*([0-9OoIl|]{5,12})\b/i);
  cell=normalizeNum(cell);
 
- let band=normalizeNum(one(/(?:^|\n)\s*Band\s+(?:Band\s*)?([0-9OoIl|]{1,3})\b/im));
+ // Accept the common flattened row "Band Band 2 Roaming 0" but never a bare
+ // number after Band because that could be the roaming value.
+ let band=normalizeNum(one(/(?:^|\n)\s*Band\s+(?:Band\s*)?([0-9OoIl|]{1,3})\b[^\n]*\bRoaming\b/im));
  if(band)band='B'+band;
- let bw=one(/Band\s*Width\s*[:#=-]?\s*(\d{1,3}\s*MHz)\b/i).replace(/\s+/g,' ');
+ let bw=one(/(?:Band\s*Width|Width)\s*[:#=-]?\s*(\d{1,3}\s*MHz)\b/i).replace(/\s+/g,' ');
  const rsrp=one(/\bRSRP\s*[:#=-]?\s*(-?\s*\d{2,3}(?:\.\d+)?)/i).replace(/\s+/g,'');
  const rsrq=one(/\bRSRQ\s*[:#=-]?\s*(-?\s*\d{1,3}(?:\.\d+)?)/i).replace(/\s+/g,'');
  const snr=one(/\bSNR\s*[:#=-]?\s*(-?\s*\d{1,3}(?:\.\d+)?)/i).replace(/\s+/g,'');
  let sid='',local='';
  if(cell){try{const n=BigInt(cell);sid=(n/256n).toString();local=(n%256n).toString();}catch(e){}}
- return {_franklinFormat:true,radio:'LTE',plmn,cell,sid,local,band,bw,rsrp,rsrq,snr};
+ const out={_franklinFormat:true,radio:'LTE',plmn,cell,sid,local,band,bw,rsrp,rsrq,snr};
+ out._franklinScore=['plmn','cell','band','bw','rsrp','rsrq','snr'].filter(k=>String(out[k]||'').trim()).length;
+ return out;
+}
+
+function mergeFranklinDiagnostics(a,b){
+ if(!a?._franklinFormat)return b||{};
+ if(!b?._franklinFormat)return a||{};
+ // Prefer the later pass for conflicting non-empty values. The original image
+ // is processed second and generally preserves thin minus signs/table text best.
+ const out={...a,_franklinFormat:true,radio:'LTE'};
+ for(const k of ['plmn','cell','sid','local','band','bw','rsrp','rsrq','snr']){
+   if(String(b[k]??'').trim()!=='')out[k]=b[k];
+ }
+ out._franklinScore=['plmn','cell','band','bw','rsrp','rsrq','snr'].filter(k=>String(out[k]||'').trim()).length;
+ return out;
 }
 
 function applyFranklinOverrides(base,franklin){
  if(!franklin||!franklin._franklinFormat)return base;
  const x={...base,_franklinFormat:true,radio:'LTE'};
- // Franklin's label-bound parser is more authoritative than the generic parser.
+ // This runs AFTER generic parsing, so Franklin values are final authority.
  for(const k of ['plmn','cell','sid','local','band','bw','rsrp','rsrq','snr']){
    if(String(franklin[k]??'').trim()!=='')x[k]=franklin[k];
  }
@@ -6179,7 +6227,7 @@ runOcrBtn.addEventListener('click',async()=>{
  try{
    document.getElementById('ocrStatus').textContent='Scanning and autofilling fields…';
    const enhanced=await makeEnhancedImage(f);
-   // Current 52 pins the OCR runtime to the same URLs pre-cached by sw.js.
+   // Current 53 pins the OCR runtime to the same URLs pre-cached by sw.js.
    // The non-SIMD LSTM core is intentionally selected for broad Safari/iPhone
    // compatibility. Once cached, every request below is satisfied offline.
    const OCR_REMOTE={
@@ -6195,8 +6243,10 @@ runOcrBtn.addEventListener('click',async()=>{
    const d1=r1?.data||{};
    let fields=mergeScanFields(extractScanFieldsSpatial(d1),extractDiagnosticTextLines(d1.text||''));
    fields=mergeScanFields(fields,extractHotspotLteDiagnostics(d1.text||''));
-   fields=applyFranklinOverrides(fields,extractFranklinDiagnosticsText(d1.text||''));
-   fields=applyFranklinOverrides(fields,extractFranklinDiagnosticsSpatial(d1));
+   let frankText=extractFranklinDiagnosticsText(d1.text||'');
+   let frankSpatial=extractFranklinDiagnosticsSpatial(d1);
+   // Spatial Franklin parsing outranks flattened OCR text.
+   fields=applyFranklinOverrides(fields,mergeFranklinDiagnostics(frankText,frankSpatial));
    let dualSpatial=extractDualRadioSpatial(d1);
 
    // Always do a second pass on the original. Merge whichever pass reads each row best.
@@ -6208,8 +6258,13 @@ runOcrBtn.addEventListener('click',async()=>{
    fields=mergeScanFields(fields,extractScanFieldsSpatial(d2));
    fields=mergeScanFields(fields,extractDiagnosticTextLines(d2.text||''));
    fields=mergeScanFields(fields,extractHotspotLteDiagnostics(d2.text||''));
-   fields=applyFranklinOverrides(fields,extractFranklinDiagnosticsText(d2.text||''));
-   fields=applyFranklinOverrides(fields,extractFranklinDiagnosticsSpatial(d2));
+   frankText=mergeFranklinDiagnostics(frankText,extractFranklinDiagnosticsText(d2.text||''));
+   frankSpatial=mergeFranklinDiagnostics(frankSpatial,extractFranklinDiagnosticsSpatial(d2));
+   // FINAL Franklin lock: generic parsing above is allowed to fill missing data,
+   // but it is never allowed to overwrite label-bound Franklin fields. Any
+   // spatial value from either pass outranks flattened text from either pass.
+   const franklin=mergeFranklinDiagnostics(frankText,frankSpatial);
+   fields=applyFranklinOverrides(fields,franklin);
    dualSpatial=mergeDualRadioStats(dualSpatial,extractDualRadioSpatial(d2));
    fields._dualRadioSpatial=dualSpatial;
 
@@ -6236,7 +6291,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 52';
+  const BUILD='Current 53';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

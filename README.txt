@@ -1,4 +1,8 @@
-Master Tower Registry Current 52
+Current 53 — Franklin Table Parser Lock
 
-Adds Franklin hotspot diagnostics parsing while preserving true cached offline OCR and automatic two-way cloud sync.
-Franklin fields are parsed by nearest label/value pairing so Band, Band Width, RSRP, RSRQ, SNR, PLMN, and Cell ID stay in the correct columns.
+- Franklin hotspot Debug/LTE table parser rebuilt around label-bounded spatial values.
+- Franklin values are applied after generic OCR parsing so generic logic cannot overwrite them.
+- Handles Franklin wrapped table labels without requiring them to survive on one OCR line.
+- Preserves cached offline OCR behavior from Current 51/52.
+- Preserves automatic two-way cloud registry synchronization and offline upload queue.
+- CellMapper remains removed.

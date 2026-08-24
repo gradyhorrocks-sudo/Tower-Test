@@ -1,4 +1,4 @@
-const CACHE='mctr-current52-franklin-offline-ocr-sync-v1';
+const CACHE='mctr-current53-franklin-parser-lock-offline-sync-v1';
 
 const CORE=[
  './',
