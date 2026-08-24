@@ -302,7 +302,7 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <button class="tab" onclick="showTab('add',this)">Add/Edit</button>
 </div>
 <div id="workBranchBanner" style="margin:8px 0 12px;padding:8px 12px;border:1px solid #475569;border-radius:10px;background:#111827;font-size:13px">
-  <b>CURRENT 57:</b> TDZ crash fix • Roaming-aware registry warnings • Cell ID registry identity priority • Franklin parser lock • Cached offline OCR • Automatic cloud sync preserved • No CellMapper.
+  <b>CURRENT 59:</b> NSA-aware hotspot Cell ID anchor handling • 5G hotspot parser • Roaming-aware registry warnings • Cell ID registry identity priority • Franklin parser lock • Cached offline OCR • Automatic cloud sync preserved • No CellMapper.
 </div>
 
 <div id="pendingChangesBar" class="card hidden" style="position:sticky;top:58px;z-index:8;border-color:#7c5f16">
@@ -4028,7 +4028,11 @@ function valueAcrossFromLabel(rows,labelRegex,valueRegex){
 
 function extractHotspotLteDiagnostics(text){
  const raw=String(text||'').replace(/\r/g,'');
- if(!/(?:4G\s*LTE\s*Network|Network\s*Operator|Signal\s*Strength\s*\(RSRP\))/i.test(raw)){
+ // This hotspot exposes the same vertical diagnostics layout for both LTE and 5G.
+ // 5G uses "Signal Strength" (without the RSRP suffix) and n-bands, while LTE
+ // may use "Signal Strength (RSRP)". Detect either layout locally so it works
+ // identically online and offline after OCR has produced text.
+ if(!/(?:4G\s*LTE\s*Network|5G\s*Network|Network\s*Operator|Signal\s*Strength(?:\s*\(RSRP\))?)/i.test(raw)){
    return {};
  }
 
@@ -4047,7 +4051,7 @@ function extractHotspotLteDiagnostics(text){
  }
 
  const operator=after(/^Network\s*Operator\s*:?$/i);
- const rsrpRaw=after(/^Signal\s*Strength\s*\(RSRP\)\s*:?$/i);
+ const rsrpRaw=after(/^Signal\s*Strength(?:\s*\(RSRP\))?\s*:?$/i);
  const snrRaw=after(/^SNR\s*:?$/i);
  const bandRaw=after(/^Band\s*:?$/i);
  const roamingRaw=after(/^Roaming\s*:?$/i);
@@ -4056,6 +4060,8 @@ function extractHotspotLteDiagnostics(text){
 
  const cell=normalizeNum(cellRaw);
  const bandNum=String(bandRaw||'').match(/\b(\d{1,3})\b/);
+ const nrBand=String(bandRaw||'').match(/\bn\s*(\d{1,3})\b/i);
+ const detected5g=/\b5G\s*Network\b/i.test(raw) || !!nrBand;
  const rsrp=String(rsrpRaw||'').match(/-?\d{2,3}(?:\.\d+)?/);
  const snr=String(snrRaw||'').match(/-?\d{1,3}(?:\.\d+)?/);
 
@@ -4094,11 +4100,14 @@ function extractHotspotLteDiagnostics(text){
 
  const out={
    _hotspotFormat:true,
-   radio:'LTE',
+   // This hotspot's 5G page is NSA: its displayed Cell ID is the LTE anchor ECI,
+   // not an NR NCI. Never run /4096 gNB math on it.
+   _hotspotNSA:detected5g,
+   radio:detected5g?'5G':'LTE',
    carrier,
    plmn,
    cell,
-   band:bandNum?'B'+bandNum[1]:'',
+   band:detected5g?(nrBand?'n'+nrBand[1]:''):(bandNum?'B'+bandNum[1]:''),
    rsrp:rsrp?rsrp[0]:'',
    snr:snr?snr[0]:'',
    roaming:isRoaming,
@@ -5519,6 +5528,37 @@ function renderDualRadioIdentification(fields){
    <div><b>${lteStatus} LTE: ${esc(lteName)}${lteState}</b>${lteDetail}<br><span class="small muted">Cell ID ${esc(d.lte.cell)} • LTE math + saved registry</span></div>
  </div>`;
 }
+
+function resolveSameCellAsKnownLte(fields){
+ const cell=String(fields?.cell||fields?.cell_id||fields?.nci||'').replace(/\D/g,'');
+ if(!/^\d+$/.test(cell) || !DB || !Array.isArray(DB.records))return null;
+ try{
+   const n=BigInt(cell), enb=(n/256n).toString(), sector=(n%256n).toString();
+   // Deliberately ignore hotspot operator/PLMN here. On this device the displayed
+   // home brand can remain \"Strata\" while roaming. The numeric Cell ID and the
+   // registry are the evidence we are testing.
+   const matches=DB.records.filter(r=>
+     String(r.radio||'').toUpperCase()==='LTE' &&
+     String(r.eNB||'').replace(/\D/g,'')===enb
+   );
+   if(matches.length!==1)return null;
+   return {record:matches[0],radio:'LTE',id:enb,local:sector,cell,source:'same-cell-lte-cross-check'};
+ }catch(e){return null;}
+}
+function sameCellKnownLteBanner(fields){
+ if(String(fields?.radio||'').toUpperCase()!=='5G')return '';
+ const c=resolveSameCellAsKnownLte(fields);
+ if(!c?.record)return '';
+ const rec=c.record;
+ const plmn=(typeof registryRecordPlmn==='function')?registryRecordPlmn(rec):(rec.plmn||'');
+ return `<div class="notice same-cell-known-lte" style="margin:12px 0;border:3px solid #22c55e;background:#0b2a1a">
+   <div style="font-weight:900">✅ CELL ID ALSO MATCHES A KNOWN LTE eNB</div>
+   <div style="margin-top:5px">Cell ID <b>${esc(c.cell)}</b> → LTE eNB <b>${esc(c.id)}</b>, sector <b>${esc(c.local)}</b>.</div>
+   <div class="small" style="margin-top:5px">That eNB exists in the registry as <b>${esc(rec.site||'Unknown')}</b> — ${esc(rec.carrier||'Unknown')} / PLMN ${esc(plmn||'Unknown')}.</div>
+   <div class="small" style="margin-top:5px"><b>The screen is reporting 5G, so this does not relabel the 5G connection as LTE.</b> It tells you that the same numeric Cell ID is a confirmed LTE registry match, which may be the LTE anchor/companion identifier exposed by the hotspot.</div>
+ </div>`;
+}
+
 function normalizedCarrierIdentityName(v){
  const s=String(v||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,' ' ).trim();
  if(!s)return '';
@@ -5598,10 +5638,77 @@ function registryMismatchWarningHtml(fields,rec,resolution){
  </div>`;
 }
 
+
+function resolveHotspotNsaAnchor(fields){
+ if(!fields?._hotspotFormat || !fields?._hotspotNSA)return null;
+ const cell=String(fields._nsaAnchorCell||fields.cell||'').replace(/\D/g,'');
+ if(!/^\d+$/.test(cell) || !DB || !Array.isArray(DB.records))return null;
+ try{
+   const n=BigInt(cell),enb=(n/256n).toString(),sector=(n%256n).toString();
+   const matches=DB.records.filter(r=>
+     String(r?.radio||'').toUpperCase()==='LTE' &&
+     String(r?.eNB||r?.enb||'').replace(/\D/g,'')===enb
+   );
+   return {cell,enb,sector,record:matches.length===1?matches[0]:null,matches};
+ }catch(e){return null;}
+}
+function renderHotspotNsaScan(fields){
+ const a=resolveHotspotNsaAnchor(fields);
+ if(!a)return false;
+ const rec=a.record;
+ const nrBand=sanitizeNrBand(fields.band||'')||String(fields.band||'').trim()||'Unknown';
+ const rr=signalRating('rsrp',fields.rsrp),sr=signalRating('snr',fields.snr);
+ if(rec){
+   const plmn=(typeof registryRecordPlmn==='function')?registryRecordPlmn(rec):(rec.plmn||'');
+   fields._resolvedRecord=rec;
+   fields._resolutionSource='NSA LTE anchor Cell ID /256 registry match';
+   fields.sid=a.enb; fields.local=a.sector;
+   fields._nsaAnchorRecord=rec;
+   document.getElementById('scanIdentity').innerHTML=`<div class="card result known">
+     <h2>${esc(rec.site||'Known LTE anchor site')}</h2>
+     <div class="notice" style="margin:0 0 12px;border:3px solid #22c55e;background:#0b2a1a">
+       <div style="font-weight:900">✅ 5G NSA CONNECTION</div>
+       <div class="small" style="margin-top:5px">The hotspot's 5G page exposes the <b>LTE anchor Cell ID</b>. This Cell ID is intentionally resolved with LTE /256 math, not 5G /4096 math.</div>
+     </div>
+     <div class="kv"><span>Serving carrier</span><span>${esc(rec.carrier||'Unknown')}</span></div>
+     <div class="kv"><span>Serving PLMN</span><span>${esc(plmn||'Unknown')}</span></div>
+     <div class="kv"><span>Connection</span><span>5G NSA</span></div>
+     <div class="kv"><span>NR Band</span><span>${esc(nrBand)}</span></div>
+     <div class="kv"><span>LTE Anchor eNB</span><span>${esc(a.enb)}</span></div>
+     <div class="kv"><span>LTE Anchor sector</span><span>${esc(a.sector)}</span></div>
+     <div class="kv"><span>Anchor Cell ID</span><span>${esc(a.cell)}</span></div>
+     <div class="kv"><span>Roaming</span><span>${fields.roaming?'Yes':'No'}</span></div>
+     <div style="margin-top:12px"><b>LTE anchor reverse check:</b> ${esc(a.enb)} × 256 + ${esc(a.sector)} = ${esc(a.cell)} ✅</div>
+     <div class="scan-metric-breakdown" style="margin-top:12px;display:grid;gap:8px">
+       <div style="padding:9px 11px;border:1px solid #334155;border-radius:10px;background:#0f172a"><b>RSRP — Signal Strength</b><div class="small" style="margin-top:3px">${fields.rsrp?`${rr[1]} <b>${esc(rr[0])}: ${esc(fields.rsrp)} dBm</b>`:'⚪ <b>Unknown</b>'}</div></div>
+       <div style="padding:9px 11px;border:1px solid #334155;border-radius:10px;background:#0f172a"><b>SNR/SINR — Signal Clarity</b><div class="small" style="margin-top:3px">${fields.snr?`${sr[1]} <b>${esc(sr[0])}: ${esc(fields.snr)} dB</b>`:'⚪ <b>Unknown</b>'}</div></div>
+     </div>
+     <div class="notice" style="margin-top:12px"><b>NSA anchor identification:</b> Cell ID ${esc(a.cell)} → eNB ${esc(a.enb)}, sector ${esc(a.sector)} → ${esc(rec.site||'Unknown')} in the saved registry. No gNB is derived from this Cell ID.</div>
+   </div>`;
+   return true;
+ }
+ document.getElementById('scanIdentity').innerHTML=`<div class="card result unknown">
+   <h2>5G NSA Connection — LTE Anchor Unmapped</h2>
+   <div class="notice" style="margin-bottom:12px;border:3px solid #f59e0b;background:#3b2a08">
+     <b>⚠️ LTE anchor eNB ${esc(a.enb)} is not in the registry.</b>
+     <div class="small" style="margin-top:5px">Anchor Cell ID ${esc(a.cell)} → eNB ${esc(a.enb)}, sector ${esc(a.sector)}. The hotspot is on 5G NSA, so this Cell ID is not treated as an NR NCI and no gNB /4096 calculation is shown.</div>
+   </div>
+   <div class="kv"><span>Connection</span><span>5G NSA</span></div>
+   <div class="kv"><span>NR Band</span><span>${esc(nrBand)}</span></div>
+   <div class="kv"><span>LTE Anchor eNB</span><span>${esc(a.enb)}</span></div>
+   <div class="kv"><span>LTE Anchor sector</span><span>${esc(a.sector)}</span></div>
+   <div class="kv"><span>Anchor Cell ID</span><span>${esc(a.cell)}</span></div>
+ </div>`;
+ return true;
+}
+
 function identifyFromScan(fields){
  fields=captureObservedScanIdentity(fields);
  fields=enrichSparseLteScan(fields);
  if(!DB)return;
+ // NSA hotspot page: the displayed Cell ID is the LTE anchor ECI. Handle it
+ // before generic 5G resolution so /4096 gNB math can never run on this value.
+ if(renderHotspotNsaScan(fields))return;
  fields=applySavedRegistryRadioAuthority(fields);
 
  const resolution=resolveScanFromEntireRegistry(fields);
@@ -5653,6 +5760,7 @@ function identifyFromScan(fields){
     <h2>${radio==='5G'&&raw?'5G Connection — Tower Unmapped':'Signal Quality — Tower ID Incomplete'}</h2>
     ${dualRadioVerificationCard(fields)}
     ${radio==='5G'?knownLteSiteSummary(fields,fields._ocrText||''):''}
+    ${radio==='5G'?sameCellKnownLteBanner(fields):''}
     <div class="small muted" style="margin-bottom:10px">${radio==='5G'&&raw?'5G NCI read successfully. The gNB/local cell were derived, but that exact gNB is not mapped in the full registry yet.':`Missing ${esc(missing.join(', '))}. Tower identification is incomplete.`} The measured radio quality can still be analyzed.</div>
     <div style="margin-top:8px"><b>Signal: ${icon} ${overall}</b></div>
     <div class="scan-metric-breakdown" style="margin-top:10px;display:grid;gap:8px">
@@ -5830,6 +5938,7 @@ function identifyFromScan(fields){
      <div><b>🌐 Data:</b> ${esc(dataText)}</div>
    </div>
  </div>
+ ${radio==='5G'?sameCellKnownLteBanner(fields):''}
  ${radio==='5G'?forcedKnownLteBanner(fields):''}
  <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
  
@@ -6211,8 +6320,15 @@ function maintainDuplicateDualRadioBadge(fields){
 function fillScanResults(x,text){
  x=applyLocalRegistryMatchToScan(x);
  if(x?._hotspotFormat){
-   x.radio='LTE';
-   if(x.band && !/^B/i.test(x.band))x.band='B'+String(x.band).replace(/\D/g,'');
+   // LTE page stays LTE. The hotspot's 5G page is NSA and must remain 5G,
+   // while its Cell ID is handled separately as an LTE anchor ECI.
+   if(x._hotspotNSA){
+     x.radio='5G';
+     x._nsaAnchorCell=String(x.cell||'').replace(/\D/g,'');
+   }else{
+     x.radio='LTE';
+     if(x.band && !/^B/i.test(x.band))x.band='B'+String(x.band).replace(/\D/g,'');
+   }
  }
 
  x._ocrText=String(text||'');
