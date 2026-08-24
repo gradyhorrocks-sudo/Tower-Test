@@ -1,4 +1,4 @@
-const CACHE='mctr-current53-franklin-parser-lock-offline-sync-v1';
+const CACHE='mctr-current56-roaming-aware-registry-mismatch-offline-sync-v1';
 
 const CORE=[
  './',

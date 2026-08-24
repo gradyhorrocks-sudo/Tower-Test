@@ -1,0 +1,24 @@
+Current 54 regression checks
+
+PASS — JavaScript syntax check for all inline scripts.
+PASS — ZIP integrity check.
+PASS — Registry JSON is byte-for-byte unchanged from Current 53.
+PASS — Cloud sync code region is byte-for-byte unchanged from Current 53.
+PASS — LTE roaming identity regression:
+  Cell ID 245768705 -> eNB 960034, sector 1.
+  OCR/operator metadata deliberately set to STRATA / 312290.
+  Registry-first Cell ID match correctly resolves Verizon / 311480 / Neola Utah.
+PASS — Franklin regression:
+  Cell ID 24653837 -> eNB 96304, sector 13.
+  Correctly remains T-Mobile / 310260 / Roosevelt Hill Utah.
+PASS — Unknown LTE Cell ID does not fabricate a registry match.
+PASS — 5G registry-first test:
+  NCI manufactured from mapped gNB 1875624 with wrong OCR carrier metadata.
+  Registry-first NCI candidate correctly resolves the mapped T-Mobile gNB.
+
+Identity rule implemented:
+1. Read Cell ID/NCI.
+2. Do LTE/5G identifier math.
+3. Search the full local registry by derived tower ID.
+4. If the numeric match is unique, the registry carrier/PLMN/site is authoritative.
+5. OCR operator/PLMN is only used to break a genuine numeric-ID collision.

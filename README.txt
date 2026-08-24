@@ -1,8 +1,8 @@
-Current 53 — Franklin Table Parser Lock
+Current 54 — Cell ID Registry Identity Priority
 
-- Franklin hotspot Debug/LTE table parser rebuilt around label-bounded spatial values.
-- Franklin values are applied after generic OCR parsing so generic logic cannot overwrite them.
-- Handles Franklin wrapped table labels without requiring them to survive on one OCR line.
-- Preserves cached offline OCR behavior from Current 51/52.
-- Preserves automatic two-way cloud registry synchronization and offline upload queue.
-- CellMapper remains removed.
+Changes from Current 53:
+- LTE Cell ID math now derives eNB/sector first and searches the full local registry by radio + eNB.
+- A unique registry match overrides OCR/hotspot operator carrier and inferred PLMN.
+- PLMN/operator is used only as a tie-breaker if the same numeric tower ID exists for multiple carriers.
+- 5G NCI registry matching now tests all mapped gNBs before using carrier/PLMN as a tie-breaker.
+- Franklin parser, M2000/generic scanner, offline OCR, local registry, offline edits and automatic cloud sync are preserved.

@@ -302,7 +302,7 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <button class="tab" onclick="showTab('add',this)">Add/Edit</button>
 </div>
 <div id="workBranchBanner" style="margin:8px 0 12px;padding:8px 12px;border:1px solid #475569;border-radius:10px;background:#111827;font-size:13px">
-  <b>CURRENT 53:</b> Franklin table parser lock • Cached offline OCR • Automatic cloud sync preserved • No CellMapper.
+  <b>CURRENT 56:</b> Roaming-aware registry mismatch warnings • Cell ID registry identity priority • Franklin parser lock • Cached offline OCR • Automatic cloud sync preserved • No CellMapper.
 </div>
 
 <div id="pendingChangesBar" class="card hidden" style="position:sticky;top:58px;z-index:8;border-color:#7c5f16">
@@ -3476,39 +3476,72 @@ function purgeForbiddenNrBandsFromRegistry(db){
  return db;
 }
 
+function registryRecordPlmn(rec){
+ const direct=normalizeRegistryPlmn(rec?.plmn);
+ if(direct)return direct;
+ const carrier=String(rec?.carrier||'').trim();
+ if(DB?.plmns){
+   const hit=Object.entries(DB.plmns).find(([p,name])=>String(name||'').trim()===carrier);
+   if(hit)return normalizeRegistryPlmn(hit[0]);
+ }
+ return normalizeRegistryPlmn(PLMNS?.[carrier]||'');
+}
+
 function derive5gFromRegistry(nci, carrier, plmn){
  const raw=String(nci||'').trim();
  if(!/^\d+$/.test(raw) || !DB || !Array.isArray(DB.records)){
-   return {gNB:'',local:'',bits:null,matched:false};
+   return {gNB:'',local:'',bits:null,matched:false,record:null};
  }
  let n;
- try{ n=BigInt(raw); }catch(e){ return {gNB:'',local:'',bits:null,matched:false}; }
+ try{ n=BigInt(raw); }catch(e){ return {gNB:'',local:'',bits:null,matched:false,record:null}; }
 
- const relevant=DB.records.filter(r=>
-   String(r.radio||'').toUpperCase()==='5G' &&
-   String(r.gNB||'').trim() &&
-   (!carrier || String(r.carrier||'')===String(carrier)) &&
-   (!plmn || String(r.plmn||'')===String(plmn))
+ const all5g=DB.records.filter(r=>
+   String(r.radio||'').toUpperCase()==='5G' && String(r.gNB||'').trim()
  );
 
- // NR Cell Identity is 36 bits total. gNB-ID length may vary from 22 to 32 bits,
- // therefore the local cell portion can be 14 down to 4 bits.
- // Do not assume one split. Only accept a split that matches a known registry gNB.
- const matches=[];
+ // If this exact NCI was previously saved, it is stronger evidence than any
+ // operator/carrier text OCR can provide.
+ const exactCell=all5g.filter(r=>String(r.cell_id||'').replace(/\D/g,'')===raw);
+ if(exactCell.length===1){
+   const rec=exactCell[0];
+   const g=String(rec.gNB||'').replace(/\D/g,'');
+   for(let localBits=4; localBits<=14; localBits++){
+     const div=1n<<BigInt(localBits);
+     if((n/div).toString()===g){
+       return {gNB:g,local:(n%div).toString(),bits:localBits,matched:true,record:rec};
+     }
+   }
+ }
+
+ // NR NCI math is tested against EVERY mapped 5G gNB first. Carrier/PLMN is
+ // only a tie-breaker. This prevents a roaming/operator label from hiding the
+ // actual mapped tower identity.
+ const candidates=[];
+ const seen=new Set();
  for(let localBits=4; localBits<=14; localBits++){
    const div=1n<<BigInt(localBits);
    const g=(n/div).toString();
    const local=(n%div).toString();
-   if(relevant.some(r=>String(r.gNB||'').trim()===g)){
-     matches.push({gNB:g,local,bits:localBits,matched:true});
+   for(const rec of all5g){
+     if(String(rec.gNB||'').replace(/\D/g,'')!==g)continue;
+     const key=`${g}|${localBits}|${String(rec.carrier||'')}|${String(rec.site||'')}`;
+     if(seen.has(key))continue;
+     seen.add(key);
+     candidates.push({gNB:g,local,bits:localBits,matched:true,record:rec});
    }
  }
- if(matches.length===1)return matches[0];
-
- // If multiple split lengths somehow point at known IDs, prefer the most specific
- // record whose reverse math exactly reconstructs the NCI; all candidates already do,
- // so reject ambiguity rather than inventing a tower.
- return {gNB:'',local:'',bits:null,matched:false};
+ if(candidates.length===1)return candidates[0];
+ if(candidates.length>1){
+   const p=normalizeRegistryPlmn(plmn);
+   const c=String(carrier||'').trim().toLowerCase();
+   const narrowed=candidates.filter(x=>{
+     const rp=registryRecordPlmn(x.record);
+     const rc=String(x.record?.carrier||'').trim().toLowerCase();
+     return (p && rp===p) || (c && rc===c);
+   });
+   if(narrowed.length===1)return narrowed[0];
+ }
+ return {gNB:'',local:'',bits:null,matched:false,record:null};
 }
 
 function describe5gNciStatus(fields){
@@ -3535,73 +3568,107 @@ function findLocalRegistryTowerFromScan(fields){
 
  const radio=String(fields.radio||'').toUpperCase();
  const plmn=normalizeRegistryPlmn(fields.plmn);
+ const carrier=String(fields.carrier||'').trim().toLowerCase();
  const cell=String(fields.cell||fields.cell_id||fields.nci||'').replace(/\D/g,'');
  let sid=String(fields.sid||fields.eNB||fields.gNB||'').replace(/\D/g,'');
 
+ function chooseByIdentity(matches){
+   if(matches.length===1)return matches[0];
+   if(!matches.length)return null;
+
+   // Exact stored Cell ID is the strongest tie-breaker when available.
+   if(cell){
+     const exact=matches.filter(r=>String(r.cell_id||'').replace(/\D/g,'')===cell);
+     if(exact.length===1)return exact[0];
+   }
+
+   // PLMN/operator metadata only disambiguates an actual numeric-ID collision.
+   // It never blocks a unique Cell-ID-derived tower match.
+   if(plmn){
+     const byPlmn=matches.filter(r=>registryRecordPlmn(r)===plmn);
+     if(byPlmn.length===1)return byPlmn[0];
+   }
+   if(carrier){
+     const byCarrier=matches.filter(r=>String(r.carrier||'').trim().toLowerCase()===carrier);
+     if(byCarrier.length===1)return byCarrier[0];
+   }
+   return null;
+ }
+
  if(radio==='LTE'){
-   if(!sid && cell){
+   if(cell){
      try{sid=(BigInt(cell)/256n).toString()}catch(e){}
    }
    if(!sid)return null;
-   return DB.records.find(r=>
+   const matches=DB.records.filter(r=>
      String(r.radio||'').toUpperCase()==='LTE' &&
-     String(r.eNB||'').replace(/\D/g,'')===sid &&
-     registryCarrierMatchForPlmn(r,plmn)
-   ) || null;
+     String(r.eNB||'').replace(/\D/g,'')===sid
+   );
+   return chooseByIdentity(matches);
  }
 
  if(radio==='5G'){
-   if(!sid && cell){
-     try{sid=(BigInt(cell)/4096n).toString()}catch(e){}
+   if(cell){
+     const d=derive5gFromRegistry(cell,fields.carrier,fields.plmn);
+     if(d.matched && d.record)return d.record;
+     if(d.matched)sid=d.gNB;
    }
    if(!sid)return null;
-   return DB.records.find(r=>
+   const matches=DB.records.filter(r=>
      String(r.radio||'').toUpperCase()==='5G' &&
-     String(r.gNB||'').replace(/\D/g,'')===sid &&
-     registryCarrierMatchForPlmn(r,plmn)
-   ) || null;
+     String(r.gNB||'').replace(/\D/g,'')===sid
+   );
+   return chooseByIdentity(matches);
  }
 
- // If OCR did not classify radio but we have a Cell ID, try both math paths
- // against the downloaded/local registry instead of requiring internet.
+ // Unknown radio: derive both ways and let an unambiguous registry identity win.
  if(cell){
-   let lteSid='', nrSid='';
-   try{
-     const n=BigInt(cell);
-     lteSid=(n/256n).toString();
-     nrSid=(n/4096n).toString();
-   }catch(e){}
-   const lte=DB.records.find(r=>
+   let lteSid='';
+   try{lteSid=(BigInt(cell)/256n).toString()}catch(e){}
+   const lte=chooseByIdentity(DB.records.filter(r=>
      String(r.radio||'').toUpperCase()==='LTE' &&
-     String(r.eNB||'').replace(/\D/g,'')===lteSid &&
-     registryCarrierMatchForPlmn(r,plmn)
-   );
+     String(r.eNB||'').replace(/\D/g,'')===lteSid
+   ));
    if(lte)return lte;
-   const nr=DB.records.find(r=>
-     String(r.radio||'').toUpperCase()==='5G' &&
-     String(r.gNB||'').replace(/\D/g,'')===nrSid &&
-     registryCarrierMatchForPlmn(r,plmn)
-   );
-   if(nr)return nr;
+
+   const d=derive5gFromRegistry(cell,fields.carrier,fields.plmn);
+   if(d.matched && d.record)return d.record;
  }
  return null;
 }
+
 function applyLocalRegistryMatchToScan(fields){
  const rec=findLocalRegistryTowerFromScan(fields);
  if(!rec)return fields;
+
+ // Cell ID/NCI-derived registry identity is authoritative. OCR operator names
+ // remain useful context, but they cannot overwrite the carrier/PLMN/site of a
+ // unique numeric tower match.
  fields.site=rec.site||fields.site||'';
  fields.carrier=rec.carrier||fields.carrier||'';
- fields.plmn=rec.plmn||fields.plmn||'';
+ fields.plmn=registryRecordPlmn(rec)||fields.plmn||'';
  fields.radio=rec.radio||fields.radio||'';
+ fields._registryIdentityMatched=true;
+ fields._registryIdentitySource='Cell ID math → local registry';
+ fields._ocrCarrier=fields._ocrCarrier||fields._networkOperator||'';
+
  if(rec.radio==='LTE'){
    fields.sid=String(rec.eNB||fields.sid||'');
    fields.eNB=String(rec.eNB||fields.eNB||'');
+   if(fields.cell){
+     try{fields.local=(BigInt(String(fields.cell).replace(/\D/g,''))%256n).toString()}catch(e){}
+   }
  }else if(rec.radio==='5G'){
    fields.sid=String(rec.gNB||fields.sid||'');
    fields.gNB=String(rec.gNB||fields.gNB||'');
+   if(fields.cell){
+     const d=derive5gFromRegistry(fields.cell,fields.carrier,fields.plmn);
+     if(d.matched){fields.local=d.local;fields.gnbLocalBits=d.bits;}
+   }
  }
  return fields;
 }
+
 
 
 function identifyFromScan(fields){
@@ -3612,6 +3679,13 @@ function identifyFromScan(fields){
    fields.sid=d.matched?d.gNB:'';
    fields.local=d.matched?d.local:'';
    fields.gnbLocalBits=d.matched?d.bits:null;
+   if(d.matched && d.record){
+     fields.site=d.record.site||fields.site||'';
+     fields.carrier=d.record.carrier||fields.carrier||'';
+     fields.plmn=registryRecordPlmn(d.record)||fields.plmn||'';
+     fields._registryIdentityMatched=true;
+     fields._registryIdentitySource='Cell ID/NCI math → local registry';
+   }
  }
  if(!DB)return;
  const plmn=fields.plmn||'';
@@ -3619,7 +3693,7 @@ function identifyFromScan(fields){
  const raw=fields.cell||'';
  const sid=fields.sid||'';
  const local=fields.local||'';
- const carrier=DB.plmns[plmn]||'Unknown';
+ const carrier=fields.carrier||DB.plmns[plmn]||'Unknown';
 
  const rec=findExistingScanTower(carrier,radio,sid);
 
@@ -3791,6 +3865,7 @@ function identifyFromScan(fields){
  </div>
 </div>
  ${radio==='5G'?forcedKnownLteBanner(fields):''}
+ ${fields._registryIdentityMatched?'<div class="notice" style="margin-top:10px"><b>Registry identity:</b> Cell ID math matched this saved tower. Saved carrier/PLMN/site override the hotspot operator label.</div>':''}
  <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
  
  ${rec?.notes?'<div class="small" style="margin-top:8px">'+esc(rec.notes)+'</div>':''}
@@ -3986,22 +4061,35 @@ function extractHotspotLteDiagnostics(text){
 
  let carrier='';
  let plmn='';
+ let plmnInferredFromOperator=false;
+ let carrierInferredFromOperator=false;
+ const isRoaming=/\byes\b/i.test(roamingRaw);
  if(/strata/i.test(operator)){
+   // On this hotspot, "Strata" remains the home-brand/operator label even while
+   // the modem is roaming on another serving network. Do not manufacture serving
+   // PLMN 312290 from that label when Roaming=Yes. Cell ID math + registry decides
+   // the serving tower/carrier instead.
    carrier='STRATA Networks';
-   plmn='312290';
+   carrierInferredFromOperator=true;
+   if(!isRoaming){plmn='312290';plmnInferredFromOperator=true;}
  }else if(/t-?mobile/i.test(operator)){
    carrier='T-Mobile';
    plmn='310260';
+   carrierInferredFromOperator=true; plmnInferredFromOperator=true;
  }else if(/union/i.test(operator)){
    carrier='Union Wireless';
    plmn='310020';
+   carrierInferredFromOperator=true; plmnInferredFromOperator=true;
  }else if(/verizon/i.test(operator)){
    carrier='Verizon';
+   carrierInferredFromOperator=true;
  }else if(/at&t|att/i.test(operator)){
    carrier='AT&T';
    plmn='310410';
+   carrierInferredFromOperator=true; plmnInferredFromOperator=true;
  }else if(operator){
    carrier=operator;
+   carrierInferredFromOperator=true;
  }
 
  const out={
@@ -4013,14 +4101,16 @@ function extractHotspotLteDiagnostics(text){
    band:bandNum?'B'+bandNum[1]:'',
    rsrp:rsrp?rsrp[0]:'',
    snr:snr?snr[0]:'',
-   roaming:/\byes\b/i.test(roamingRaw),
+   roaming:isRoaming,
    _networkStatus:status,
-   _networkOperator:operator
+   _networkOperator:operator,
+   _carrierInferredFromOperator:carrierInferredFromOperator,
+   _plmnInferredFromOperator:plmnInferredFromOperator
  };
  return out;
 }
 
-// FRANKLIN HOTSPOT DIAGNOSTICS — Current 53
+// FRANKLIN HOTSPOT DIAGNOSTICS — Current 56
 // Franklin debug pages are a four-column table. Several labels wrap inside
 // their cells ("PLMN Selected", "DL Channel", "Band Width"), so detection
 // MUST NOT depend on those multi-word labels surviving as one OCR text line.
@@ -5429,7 +5519,87 @@ function renderDualRadioIdentification(fields){
    <div><b>${lteStatus} LTE: ${esc(lteName)}${lteState}</b>${lteDetail}<br><span class="small muted">Cell ID ${esc(d.lte.cell)} • LTE math + saved registry</span></div>
  </div>`;
 }
+function normalizedCarrierIdentityName(v){
+ const s=String(v||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,' ' ).trim();
+ if(!s)return '';
+ if(s==='strata'||s==='strata networks')return 'strata networks';
+ if(s==='t mobile'||s==='tmobile')return 't-mobile';
+ if(s==='verizon'||s==='verizon wireless'||s==='verizon lteira')return 'verizon';
+ if(s==='att'||s==='at t'||s==='at&t')return 'at&t';
+ if(s==='union'||s==='union wireless')return 'union wireless';
+ return s;
+}
+function captureObservedScanIdentity(fields){
+ if(!fields)return fields;
+ // Capture what the screenshot/parser reported BEFORE registry authority changes it.
+ if(fields._observedIdentityCaptured)return fields;
+ fields._observedIdentityCaptured=true;
+ fields._observedPlmn=String(fields.plmn||'').replace(/\D/g,'');
+ fields._observedCarrier=String(fields.carrier||'').trim();
+ fields._observedRadio=String(fields.radio||'').trim().toUpperCase();
+ fields._observedSid=String(fields.sid||fields.eNB||fields.gNB||'').replace(/\D/g,'');
+ fields._observedCell=String(fields.cell||fields.cell_id||fields.nci||'').replace(/\D/g,'');
+ fields._observedRoaming=!!fields.roaming;
+ fields._observedNetworkOperator=String(fields._networkOperator||'').trim();
+ fields._observedCarrierInferredFromOperator=!!fields._carrierInferredFromOperator;
+ fields._observedPlmnInferredFromOperator=!!fields._plmnInferredFromOperator;
+ return fields;
+}
+function registryMismatchDetails(fields,rec,resolution){
+ if(!fields||!rec)return null;
+ const observedPlmn=String(fields._observedPlmn||'').replace(/\D/g,'');
+ const observedCarrier=String(fields._observedCarrier||'').trim();
+ const observedRadio=String(fields._observedRadio||'').trim().toUpperCase();
+ const observedSid=String(fields._observedSid||'').replace(/\D/g,'');
+ const cell=String(fields._observedCell||fields.cell||'').replace(/\D/g,'');
+ const observedRoaming=!!fields._observedRoaming;
+ const networkOperator=String(fields._observedNetworkOperator||'').trim();
+ const carrierIsOperatorInference=!!fields._observedCarrierInferredFromOperator;
+ const plmnIsOperatorInference=!!fields._observedPlmnInferredFromOperator;
+ const registryPlmn=(typeof registryRecordPlmn==='function')?String(registryRecordPlmn(rec)||'').replace(/\D/g,''):String(rec.plmn||'').replace(/\D/g,'');
+ const registryCarrier=String(rec.carrier||'').trim();
+ const registryRadio=String(rec.radio||'').trim().toUpperCase();
+ const registrySid=String(rec.eNB||rec.gNB||'').replace(/\D/g,'');
+ const diffs=[];
+ // A hotspot may keep showing its HOME operator/brand while roaming. An identity
+ // inferred only from that label is not a trustworthy serving-network identifier.
+ // Explicit PLMN/tower IDs still warn normally.
+ const suppressOperatorIdentity=observedRoaming && (carrierIsOperatorInference || plmnIsOperatorInference || /strata/i.test(networkOperator));
+ if(observedPlmn && registryPlmn && observedPlmn!==registryPlmn && !(suppressOperatorIdentity && plmnIsOperatorInference)){
+   diffs.push(`PLMN ${observedPlmn} ≠ registry PLMN ${registryPlmn}`);
+ }
+ const oc=normalizedCarrierIdentityName(observedCarrier);
+ const rc=normalizedCarrierIdentityName(registryCarrier);
+ if(oc && rc && oc!==rc && !(suppressOperatorIdentity && carrierIsOperatorInference)){
+   diffs.push(`carrier/operator ${observedCarrier} ≠ registry carrier ${registryCarrier}`);
+ }
+ if(observedRadio && registryRadio && observedRadio!==registryRadio){
+   diffs.push(`radio ${observedRadio} ≠ registry radio ${registryRadio}`);
+ }
+ if(observedSid && registrySid && observedSid!==registrySid){
+   diffs.push(`tower ID ${observedSid} ≠ registry ${registryRadio==='5G'?'gNB':'eNB'} ${registrySid}`);
+ }
+ if(!diffs.length)return null;
+ return {diffs,observedPlmn,observedCarrier,observedRadio,observedSid,cell,observedRoaming,networkOperator,registryPlmn,registryCarrier,registryRadio,registrySid,site:String(rec.site||'Unknown'),source:String(resolution?.source||fields._resolutionSource||'Cell ID math')};
+}
+function registryMismatchWarningHtml(fields,rec,resolution){
+ const m=registryMismatchDetails(fields,rec,resolution);
+ if(!m)return '';
+ const idLabel=m.registryRadio==='5G'?'gNB':'eNB';
+ const cellLabel=m.registryRadio==='5G'?'NCI':'Cell ID';
+ const derivation=m.cell
+   ? `${cellLabel} <b>${esc(m.cell)}</b> resolves to ${idLabel} <b>${esc(m.registrySid||'Unknown')}</b>`
+   : `The scanned identifier resolves to ${idLabel} <b>${esc(m.registrySid||'Unknown')}</b>`;
+ return `<div class="notice registry-mismatch-warning" style="margin:0 0 12px;border:3px solid #f59e0b;background:#3b2a08;color:#fff">
+   <div style="font-weight:900;font-size:1.05em">⚠️ REGISTRY MISMATCH</div>
+   <div style="margin-top:5px">${derivation}, which is saved as <b>${esc(m.site)}</b> — <b>${esc(m.registryCarrier||'Unknown')}</b> / PLMN <b>${esc(m.registryPlmn||'Unknown')}</b>.</div>
+   <div class="small" style="margin-top:5px"><b>Scan reported:</b> ${esc(m.diffs.join(' • '))}</div>
+   <div class="small" style="margin-top:5px"><b>Action:</b> The Cell ID/NCI-derived registry identity is being used, but this warning is shown because the screenshot identity does not agree with the saved registry.</div>
+ </div>`;
+}
+
 function identifyFromScan(fields){
+ fields=captureObservedScanIdentity(fields);
  fields=enrichSparseLteScan(fields);
  if(!DB)return;
  fields=applySavedRegistryRadioAuthority(fields);
@@ -5451,7 +5621,7 @@ function identifyFromScan(fields){
    }
  }
 
- const plmn=fields.plmn||'', radio=fields.radio||'LTE', raw=fields.cell||'', sid=fields.sid||'';
+ let plmn=fields.plmn||'', radio=fields.radio||'LTE', raw=fields.cell||'', sid=fields.sid||'';
 
  if(!plmn || !raw || !sid){
    const missing=[];
@@ -5500,10 +5670,35 @@ function identifyFromScan(fields){
    return;
  }
 
- const carrier=DB.plmns[plmn]||'Unknown';
+ let carrier=DB.plmns[plmn]||fields.carrier||'Unknown';
  const rec=fields._resolvedRecord || ((typeof findExistingScanTower==='function')
    ? findExistingScanTower(carrier,radio,sid)
    : DB.records.find(r=>r.carrier===carrier&&r.radio===radio&&String(r.eNB||r.gNB)===String(sid)));
+
+ // Current 56: once Cell ID/NCI math resolves a unique saved tower, the saved
+ // registry identity is authoritative. Keep the screenshot identity separately
+ // so any disagreement can be shown as an explicit warning rather than hidden.
+ if(rec){
+   fields._registryMismatch=registryMismatchDetails(fields,rec,resolution);
+   fields.site=rec.site||fields.site||'';
+   fields.carrier=rec.carrier||fields.carrier||'';
+   fields.plmn=registryRecordPlmn(rec)||fields.plmn||'';
+   fields.radio=rec.radio||fields.radio||'';
+   if(String(rec.radio||'').toUpperCase()==='LTE'){
+     fields.sid=String(rec.eNB||fields.sid||'');
+     fields.eNB=String(rec.eNB||fields.eNB||'');
+   }else if(String(rec.radio||'').toUpperCase()==='5G'){
+     fields.sid=String(rec.gNB||fields.sid||'');
+     fields.gNB=String(rec.gNB||fields.gNB||'');
+   }
+ }
+
+ if(rec){
+   plmn=fields.plmn||plmn;
+   radio=fields.radio||radio;
+   sid=fields.sid||sid;
+   carrier=fields.carrier||DB.plmns[plmn]||carrier;
+ }
 
  // Automatic band enrichment is allowed ONLY for a real uploaded/pasted image OCR scan.
  // Manual edits to the scan fields do not change the saved Registry band list.
@@ -5596,7 +5791,7 @@ function identifyFromScan(fields){
    tacnote=fields.tac==='101'?'Other carriers NOT allowed to roam':fields.tac==='102'?'Other carriers ARE allowed to roam':'';
  }
 
- document.getElementById('scanIdentity').innerHTML=`<div class="card result ${cls}">
+ document.getElementById('scanIdentity').innerHTML=`${registryMismatchWarningHtml(fields,rec,resolution)}<div class="card result ${cls}">
  <h2>${esc(name)}</h2>
  ${renderDualRadioIdentification(fields)}
  ${duplicateDualRadioCellStatus(fields)}
@@ -6227,7 +6422,7 @@ runOcrBtn.addEventListener('click',async()=>{
  try{
    document.getElementById('ocrStatus').textContent='Scanning and autofilling fields…';
    const enhanced=await makeEnhancedImage(f);
-   // Current 53 pins the OCR runtime to the same URLs pre-cached by sw.js.
+   // Current 55 pins the OCR runtime to the same URLs pre-cached by sw.js.
    // The non-SIMD LSTM core is intentionally selected for broad Safari/iPhone
    // compatibility. Once cached, every request below is satisfied offline.
    const OCR_REMOTE={
@@ -6291,7 +6486,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 53';
+  const BUILD='Current 55';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
