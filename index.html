@@ -6580,7 +6580,7 @@ runOcrBtn.addEventListener('click',async()=>{
  try{
    document.getElementById('ocrStatus').textContent='Scanning and autofilling fields…';
    const enhanced=await makeEnhancedImage(f);
-   // Current 63 pins the OCR runtime to the same URLs pre-cached by sw.js.
+   // Current 64 pins the OCR runtime to the same URLs pre-cached by sw.js.
    // The non-SIMD LSTM core is intentionally selected for broad Safari/iPhone
    // compatibility. Once cached, every request below is satisfied offline.
    const OCR_REMOTE={
@@ -6644,7 +6644,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 63';
+  const BUILD='Current 64';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
@@ -7120,6 +7120,88 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
     return out;
   }
 
+  // Ookla's thin decimal point is much easier for OCR to DROP than to invent.
+  // Keep all independent OCR candidates for speed-card values, then reconcile
+  // factor-of-10 disagreements instead of letting the last OCR pass overwrite
+  // a correct decimal (17.5 -> 175, 14.1 -> 141).
+  function speedCandidate(v){
+    const n=Number(v);return Number.isFinite(n)&&n>=0&&n<=100000?n:null;
+  }
+  function closeSpeed(a,b){
+    a=speedCandidate(a);b=speedCandidate(b);if(a===null||b===null)return false;
+    return Math.abs(a-b)<=Math.max(.06,Math.min(a,b)*.006);
+  }
+  function decimalDigits(v){
+    const s=String(v??'');const i=s.indexOf('.');return i<0?0:s.length-i-1;
+  }
+  function reconcileSpeedMetric(candidates){
+    const reads=(candidates||[]).map(raw=>({raw,n:speedCandidate(raw)})).filter(x=>x.n!==null);
+    if(!reads.length)return null;
+    // Agreement between independent reads beats every heuristic.
+    for(let i=0;i<reads.length;i++)for(let j=i+1;j<reads.length;j++)if(closeSpeed(reads[i].n,reads[j].n))return (reads[i].n+reads[j].n)/2;
+    // If reads disagree almost exactly 10x, prefer the decimal-bearing reading.
+    // This addresses the observed Ookla condensed-font failure where the tiny
+    // point disappears (17.5=>175 / 14.1=>141). Do NOT fabricate a decimal when
+    // none of the independent reads actually saw one.
+    for(let i=0;i<reads.length;i++)for(let j=i+1;j<reads.length;j++){
+      const a=reads[i],b=reads[j],hi=Math.max(a.n,b.n),lo=Math.min(a.n,b.n);
+      if(lo>0&&Math.abs(hi/lo-10)<0.035){
+        const da=decimalDigits(a.raw),db=decimalDigits(b.raw);
+        if(da>0&&db===0)return a.n;
+        if(db>0&&da===0)return b.n;
+      }
+    }
+    // Otherwise retain the first enhanced/spatial candidate. That is safer than
+    // allowing the second full-image pass to silently replace an existing value.
+    return reads[0].n;
+  }
+
+  function speedCardCropBoxes(data,imgW,imgH){
+    const words=speedWords(data).filter(w=>bbox(w));
+    const dl=words.filter(w=>/^download$/i.test(String(w.text||''))).sort((a,b)=>bbox(a).y0-bbox(b).y0)[0];
+    const ul=words.filter(w=>/^upload$/i.test(String(w.text||''))).sort((a,b)=>bbox(a).y0-bbox(b).y0)[0];
+    if(!dl&&!ul)return {};
+    const db=dl?bbox(dl):null,ub=ul?bbox(ul):null;
+    let spacing=0;
+    if(db&&ub)spacing=Math.abs(((ub.x0+ub.x1)/2)-((db.x0+db.x1)/2));
+    if(!spacing||spacing<100)spacing=Math.max(180,(Number(imgW)||1200)*.18);
+    function box(b){
+      if(!b)return null;
+      const lh=Math.max(12,b.y1-b.y0),w=Math.max(170,spacing*1.08),h=Math.max(105,spacing*.68,lh*7.2);
+      const x=Math.max(0,b.x0-spacing*.16),y=Math.max(0,b.y0-lh*.9);
+      return {x:Math.round(x),y:Math.round(y),w:Math.round(Math.min(w,(imgW||x+w)-x)),h:Math.round(Math.min(h,(imgH||y+h)-y))};
+    }
+    return {download:box(db),upload:box(ub)};
+  }
+  function speedCardNumberFromText(text){
+    const t=String(text||'').replace(/,/g,'.').replace(/[Il|]/g,'1');
+    // Prefer a decimal token. If the card truly shows an integer, accept it too.
+    const dec=t.match(/(?<![A-Za-z])\d{1,5}\.\d{1,3}(?![A-Za-z])/);
+    if(dec)return num(dec[0]);
+    const vals=[...t.matchAll(/(?<![A-Za-z])(\d{1,5})(?![A-Za-z])/g)].map(m=>num(m[1])).filter(v=>v!==null&&v<=100000);
+    return vals.length?vals.sort((a,b)=>b-a)[0]:null;
+  }
+  async function targetedSpeedCardOcr(file,data,statusEl){
+    const words=speedWords(data);if(!words.length)return {};
+    const img=await new Promise((resolve,reject)=>{const i=new Image(),u=URL.createObjectURL(file);i.onload=()=>{URL.revokeObjectURL(u);resolve(i);};i.onerror=()=>{URL.revokeObjectURL(u);reject(new Error('Speed card image load failed'));};i.src=u;});
+    const boxes=speedCardCropBoxes(data,img.naturalWidth||img.width,img.naturalHeight||img.height),out={};
+    for(const key of ['download','upload']){
+      const b=boxes[key];if(!b||b.w<20||b.h<20)continue;
+      const c=document.createElement('canvas'),scale=2;c.width=b.w*scale;c.height=b.h*scale;
+      const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.drawImage(img,b.x,b.y,b.w,b.h,0,0,c.width,c.height);
+      // Gentle contrast only. Tiny Ookla decimal points survive this better than
+      // the aggressive full-screen threshold used by the tower screenshot OCR.
+      const id=ctx.getImageData(0,0,c.width,c.height),px=id.data;
+      for(let i=0;i<px.length;i+=4){const g=.299*px[i]+.587*px[i+1]+.114*px[i+2];const v=Math.max(0,Math.min(255,(g-42)*1.55));px[i]=px[i+1]=px[i+2]=v;}
+      ctx.putImageData(id,0,0);
+      const blob=await new Promise(resolve=>c.toBlob(resolve,'image/png',1));if(!blob)continue;
+      if(statusEl)statusEl.textContent=`Checking ${key} decimal…`;
+      const rr=await Tesseract.recognize(blob,'eng',{...OCR_REMOTE_SPEED});
+      const v=speedCardNumberFromText(rr?.data?.text||'');if(v!==null)out[key]=v;
+    }
+    return out;
+  }
+
   const rank={Excellent:5,Good:4,Fair:3,Poor:2,'Very Poor':1,Unknown:0};
   const emoji={Excellent:'🟢',Good:'🟡',Fair:'🟠',Poor:'🔴','Very Poor':'🔴',Unknown:'⚪'};
   function grade(level){return {level,emoji:emoji[level]||'⚪',rank:rank[level]||0};}
@@ -7277,9 +7359,18 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
       if(st)st.textContent='Reading Speedtest screenshot…';
       let enhanced=file;try{if(typeof makeEnhancedImage==='function')enhanced=await makeEnhancedImage(file);}catch(e){}
       const r1=await Tesseract.recognize(enhanced,'eng',{...OCR_REMOTE_SPEED,logger:m=>{if(m.status==='recognizing text'&&st)st.textContent=`Enhanced speed scan ${Math.round((m.progress||0)*100)}%…`; }},{blocks:true,tsv:true});
-      const d1=r1?.data||{};let parsed=applySpeedSpatial(parseSpeedText(d1.text||''),parseSpeedSpatial(d1));
+      const d1=r1?.data||{}, t1=parseSpeedText(d1.text||''), s1=parseSpeedSpatial(d1);
+      let parsed=applySpeedSpatial(t1,s1);
       const r2=await Tesseract.recognize(file,'eng',{...OCR_REMOTE_SPEED,logger:m=>{if(m.status==='recognizing text'&&st)st.textContent=`Original speed scan ${Math.round((m.progress||0)*100)}%…`; }},{blocks:true,tsv:true});
-      const d2=r2?.data||{};parsed=mergeSpeed(parsed,parseSpeedText(d2.text||''));parsed=applySpeedSpatial(parsed,parseSpeedSpatial(d2));
+      const d2=r2?.data||{}, t2=parseSpeedText(d2.text||''), s2=parseSpeedSpatial(d2);
+      parsed=mergeSpeed(parsed,t2);parsed=applySpeedSpatial(parsed,s2);
+      // Reconcile Download/Upload independently from every OCR read. This is
+      // intentionally speed-test-only and cannot affect Cell IDs, PLMNs, eNBs,
+      // Franklin/M2000 parsing, or any registry/cloud-sync code.
+      let card={};
+      try{card=await targetedSpeedCardOcr(file,d2,st);}catch(e){card={};}
+      parsed.download=reconcileSpeedMetric([card.download,s1.download,t1.download,s2.download,t2.download]);
+      parsed.upload=reconcileSpeedMetric([card.upload,s1.upload,t1.upload,s2.upload,t2.upload]);
       const override=document.getElementById('speedConnectionOverride')?.value||'';if(override)parsed.connection=override;
       // Sanity filters prevent dates/test IDs from becoming performance metrics.
       ['download','upload'].forEach(k=>{if(parsed[k]!==null&&(parsed[k]<0||parsed[k]>100000))parsed[k]=null;});
@@ -7305,7 +7396,7 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
   });
 
   // Exposed for regression tests only. It does not sync or mutate the tower registry.
-  window.__speedAnalyzerTest={speedResultText,parseSpeedText,parseSpeedSpatial,gradeDownload,gradeUpload,gradePing,gradeJitter,gradeLoss,experienceCards,cleanTech};
+  window.__speedAnalyzerTest={speedResultText,parseSpeedText,parseSpeedSpatial,reconcileSpeedMetric,speedCardCropBoxes,speedCardNumberFromText,gradeDownload,gradeUpload,gradePing,gradeJitter,gradeLoss,experienceCards,cleanTech};
 })();
 </script>
 
