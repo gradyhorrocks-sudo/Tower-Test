@@ -299,6 +299,7 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <button class="tab" onclick="showTab('scan',this)">Scan</button>
 <button class="tab" onclick="showTab('registry',this)">Registry</button>
 <button class="tab" onclick="showTab('map',this)">Map</button>
+<button class="tab" onclick="showTab('speed',this)">Speed Test</button>
 <button class="tab" onclick="showTab('add',this)">Add/Edit</button>
 </div>
 <div id="workBranchBanner" style="margin:8px 0 12px;padding:8px 12px;border:1px solid #475569;border-radius:10px;background:#111827;font-size:13px">
@@ -524,6 +525,57 @@ Map pin colors:
 </div>
 
 
+</div>
+</section>
+
+
+<section id="tab-speed" class="hidden">
+<div class="card">
+<h3>Speed Test Analyzer</h3>
+<p class="muted small">Analyze an Ookla Speedtest screenshot. Results stay on this device only and are never added to the tower-registry cloud sync.</p>
+
+<div>
+<label>Speedtest Screenshot</label>
+<input id="speedImage" type="file" accept="image/*">
+<div class="row" style="margin-top:10px">
+  <button type="button" class="secondary" id="speedPasteBtn">Paste Current Clipboard</button>
+  <button type="button" class="danger" id="speedClearBtn">✕ Clear</button>
+</div>
+<div id="speedPasteTarget" contenteditable="true" inputmode="none" spellcheck="false"
+     style="margin-top:10px;padding:12px;border:1px dashed #888;border-radius:10px;min-height:46px"
+     aria-label="Paste Speedtest photo here">Tap here, then choose Paste to paste a copied Speedtest photo</div>
+</div>
+
+<div id="speedPreviewWrap" class="hidden" style="margin-top:12px;text-align:center">
+  <img id="speedPreview" alt="Selected Speedtest screenshot" style="width:150px;max-width:150px;height:110px;object-fit:contain;border-radius:12px;border:1px solid #39435f">
+</div>
+
+<div class="grid" style="margin-top:12px">
+  <div>
+    <label>Connection Type</label>
+    <select id="speedConnectionOverride">
+      <option value="">Auto detect</option>
+      <option value="5G">5G</option>
+      <option value="LTE">LTE</option>
+      <option value="Wi-Fi">Wi-Fi</option>
+    </select>
+    <div class="small muted">Auto only uses a visible 5G, LTE/4G, or Wi-Fi label. “Multi” is not treated as a radio technology.</div>
+  </div>
+</div>
+
+<div style="margin-top:12px"><button id="speedRunBtn" type="button">Analyze Speed Test</button></div>
+<div id="speedStatus" class="small muted" style="margin-top:10px" aria-live="polite"></div>
+<div id="speedResults" style="margin-top:12px"></div>
+</div>
+
+<div class="card">
+<h3>Saved on This Device</h3>
+<p class="muted small">Speed-test history is local only. It is intentionally separate from tower-registry cloud sync. Cloud support can be added later without changing the saved record format.</p>
+<div class="row">
+  <button type="button" class="secondary" id="speedRefreshHistoryBtn">Refresh History</button>
+  <button type="button" class="danger" id="speedClearHistoryBtn">Clear Local Speed Tests</button>
+</div>
+<div id="speedHistory" style="margin-top:12px"></div>
 </div>
 </section>
 
@@ -6537,7 +6589,7 @@ runOcrBtn.addEventListener('click',async()=>{
  try{
    document.getElementById('ocrStatus').textContent='Scanning and autofilling fields…';
    const enhanced=await makeEnhancedImage(f);
-   // Current 55 pins the OCR runtime to the same URLs pre-cached by sw.js.
+   // Current 62 pins the OCR runtime to the same URLs pre-cached by sw.js.
    // The non-SIMD LSTM core is intentionally selected for broad Safari/iPhone
    // compatibility. Once cached, every request below is satisfied offline.
    const OCR_REMOTE={
@@ -6601,7 +6653,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 55';
+  const BUILD='Current 62';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
@@ -6846,6 +6898,427 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
   });
 
   window.__manualSignalAnalyzerTest={numbers,mean,gradeRSRP,gradeRSRQ,gradeSNR};
+})();
+</script>
+
+
+<script>
+(function(){
+  'use strict';
+  const SPEED_HISTORY_KEY='mctrSpeedTestsLocalV1';
+  const OCR_REMOTE_SPEED={
+    workerPath:'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',
+    corePath:'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1/tesseract-core-lstm.wasm.js',
+    langPath:'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int',
+    gzip:true
+  };
+
+  const num=v=>{
+    if(v===null||v===undefined)return null;
+    const m=String(v).replace(/,/g,'.').match(/-?\d+(?:\.\d+)?/);
+    if(!m)return null;
+    const n=Number(m[0]);
+    return Number.isFinite(n)?n:null;
+  };
+  const fmt=(v,d=1)=>v===null||v===undefined||!Number.isFinite(Number(v))?'Unknown':Number(v).toFixed(d).replace(/\.0$/,'');
+  const norm=s=>String(s||'').replace(/\r/g,'\n').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n');
+  const cleanTech=s=>{
+    const t=String(s||'');
+    if(/\b5G(?:\s*UC|\+)?\b/i.test(t))return '5G';
+    if(/\bLTE\b|\b4G\b/i.test(t))return 'LTE';
+    if(/\bWi[\s-]?Fi\b|\bWLAN\b/i.test(t))return 'Wi-Fi';
+    return 'Unknown';
+  };
+  function numbersAfter(text,label,maxChars=130){
+    const re=new RegExp(label,'i'),m=re.exec(text); if(!m)return [];
+    let chunk=text.slice(m.index+m[0].length,m.index+m[0].length+maxChars);
+    // Do not let fallback OCR walk out of the current result field into another
+    // metric, an ad, feedback card, navigation, or unrelated page content.
+    chunk=chunk.split(/\b(?:DOWNLOAD|UPLOAD|PING|JITTER|PACKET\s*LOSS|CONNECTIONS?|RESPONSIVENESS|Feedback|Advertisement|Sponsored|Test\s*Again|Detailed\s*Result)\b/i)[0].replace(/,/g,'.');
+    return [...chunk.matchAll(/(?<![A-Za-z])(-?\d+(?:\.\d+)?)(?![A-Za-z])/g)].map(x=>Number(x[1])).filter(Number.isFinite);
+  }
+  function metricAfter(text,label,maxChars=100){
+    const a=numbersAfter(text,label,maxChars);return a.length?a[0]:null;
+  }
+  function speedResultText(raw){
+    // Speedtest pages can contain ads, feedback cards and navigation text. Keep OCR
+    // available for result labels, but remove obvious non-result blocks before the
+    // text fallback parser gets a chance to treat an ad number as telemetry.
+    const lines=norm(raw).split('\n');
+    const junk=/^(?:Ad|Advertisement|Feedback|Test Again|Detailed Result|Share|Open|Shop|Sponsored|How likely is it|Speed|Video|Downdetector|Map)$/i;
+    return lines.filter(line=>!junk.test(line.trim())).join('\n');
+  }
+  function parseSpeedText(raw){
+    const text=speedResultText(raw);
+    const out={rawText:text,connection:cleanTech(text),download:null,upload:null,idlePing:null,downloadPing:null,uploadPing:null,idleJitter:null,downloadJitter:null,uploadJitter:null,packetLoss:null,carrier:'',server:'',device:''};
+    out.download=metricAfter(text,'\\bDOWNLOAD\\b',120);
+    out.upload=metricAfter(text,'\\bUPLOAD\\b',120);
+
+    // Compact/share layout: "Ping ms 18 161 105 ... Jitter ms 8.4"
+    const pingMatch=/\bPING\s*(?:ms)?\b/i.exec(text);
+    let pingNums=[];
+    if(pingMatch){
+      let pingChunk=text.slice(pingMatch.index+pingMatch[0].length,pingMatch.index+pingMatch[0].length+220);
+      pingChunk=pingChunk.split(/\b(?:Jitter|Packet\s*Loss|Connections?|Server|Device)\b/i)[0].replace(/,/g,'.');
+      pingNums=[...pingChunk.matchAll(/(?<![A-Za-z])(-?\d+(?:\.\d+)?)(?![A-Za-z])/g)].map(x=>Number(x[1])).filter(v=>Number.isFinite(v)&&v>=0&&v<5000);
+    }
+    if(pingNums.length){out.idlePing=pingNums[0]; if(pingNums.length>1)out.downloadPing=pingNums[1]; if(pingNums.length>2)out.uploadPing=pingNums[2];}
+
+    // Detailed layout often has three Jitter rows in Idle / Download / Upload order.
+    const jit=[];
+    for(const m of text.matchAll(/\bJitter\s*(?:ms)?\s*[:]?\s*(\d+(?:[.,]\d+)?)/ig))jit.push(Number(m[1].replace(',','.')));
+    if(jit.length){out.idleJitter=jit[0];if(jit.length>1)out.downloadJitter=jit[1];if(jit.length>2)out.uploadJitter=jit[2];}
+    if(out.idleJitter===null){
+      const j=metricAfter(text,'\\bJITTER\\s*(?:ms)?\\b',60);if(j!==null)out.idleJitter=j;
+    }
+    const pl=text.match(/PACKET\s*LOSS\s*%?\s*[:]?\s*(\d+(?:[.,]\d+)?)/i) || text.match(/PACKET\s*LOSS[^\d]{0,30}(\d+(?:[.,]\d+)?)\s*%/i);
+    if(pl)out.packetLoss=Number(pl[1].replace(',','.'));
+
+    const carriers=[['T-Mobile',/\bT[\s-]?Mobile\b/i],['STRATA Networks',/\bStrata(?:\s+Networks)?\b/i],['AT&T',/\bAT&T\b/i],['Verizon',/\bVerizon\b/i],['Union Wireless',/\bUnion\s+Wireless\b/i]];
+    for(const [name,re] of carriers){if(re.test(text)){out.carrier=name;break;}}
+    const srv=text.match(/(?:Server|Connections?)\s*[:]?\s*([^\n]{2,80})/i);if(srv)out.server=srv[1].trim();
+    const dev=text.match(/\b(iPad(?:\s+Pro)?[^\n]{0,45}|iPhone[^\n]{0,45}|Android[^\n]{0,45})/i);if(dev)out.device=dev[1].trim();
+    return out;
+  }
+
+  function bbox(w){return w&&w.bbox?{x0:Number(w.bbox.x0||0),y0:Number(w.bbox.y0||0),x1:Number(w.bbox.x1||0),y1:Number(w.bbox.y1||0)}:null;}
+  function speedWords(data){
+    try{
+      if(typeof extractOcrWords==='function')return extractOcrWords(data).filter(w=>w&&w.text&&w.bbox);
+    }catch(e){}
+    return Array.isArray(data?.words)?data.words.filter(w=>w&&w.text&&w.bbox):[];
+  }
+  function nearestNumeric(words,labelRe,mode='either'){
+    const labels=words.filter(w=>labelRe.test(String(w.text||'')));
+    if(!labels.length)return null;
+    const nums=words.map(w=>({w,b:bbox(w),n:num(w.text)})).filter(x=>x.b&&x.n!==null);
+    let best=null;
+    for(const lw of labels){
+      const l=bbox(lw);if(!l)continue;const lx=(l.x0+l.x1)/2,ly=(l.y0+l.y1)/2;
+      for(const c of nums){
+        if(c.w===lw)continue;const cx=(c.b.x0+c.b.x1)/2,cy=(c.b.y0+c.b.y1)/2;
+        const dx=cx-lx,dy=cy-ly;
+        if(dy<-35)continue;
+        if(mode==='right' && dx<0)continue;
+        if(mode==='below' && dy<0)continue;
+        // Result-region lock: a numeric value must stay physically close to its
+        // Speedtest label. This prevents numbers inside ads/feedback cards from
+        // ever becoming download, upload, ping or jitter measurements.
+        if(Math.abs(dx)>900||Math.abs(dy)>520)continue;
+        // Ignore huge identifiers/dates that cannot be speed/latency measurements.
+        if(Math.abs(c.n)>10000)continue;
+        const score=Math.abs(dy)*1.0+Math.abs(dx)*0.42;
+        if(!best||score<best.score)best={score,n:c.n};
+      }
+    }
+    return best?best.n:null;
+  }
+  function parseSpeedSpatial(data){
+    const words=speedWords(data);if(!words.length)return {};
+    const out={};
+    // Detailed Ookla results screen: find the RESPONSIVENESS/PING region first.
+    // Speed-card Download/Upload labels are above it; responsiveness columns are below it.
+    const respWords=words.filter(w=>/^(responsiveness|ping)$/i.test(String(w.text||'')) && bbox(w));
+    const respY=respWords.length?Math.min(...respWords.map(w=>bbox(w).y0)):null;
+    function speedCardValue(re){
+      const subset=respY===null?words:words.filter(w=>!bbox(w)||bbox(w).y0<respY);
+      return nearestNumeric(subset,re,'either');
+    }
+    out.download=speedCardValue(/^download$/i);
+    out.upload=speedCardValue(/^upload$/i);
+
+    // Detailed Ookla results screen: bind Idle / Download / Upload to the number
+    // directly under each responsiveness column.
+    // Compact/tablet Speedtest layout (including iPad): Download and Upload cards
+    // live in the upper-left result panel while ads may occupy the upper-right.
+    // Build a result-only bounding region from the Download/Upload labels and reject
+    // numerics far outside that region before reading the compact Ping/Jitter row.
+    const dlLabels=words.filter(w=>/^download$/i.test(String(w.text||''))&&bbox(w));
+    const ulLabels=words.filter(w=>/^upload$/i.test(String(w.text||''))&&bbox(w));
+    if(dlLabels.length&&ulLabels.length&&!respWords.length){
+      const dl=bbox(dlLabels.sort((a,b)=>bbox(a).y0-bbox(b).y0)[0]);
+      const ul=bbox(ulLabels.sort((a,b)=>bbox(a).y0-bbox(b).y0)[0]);
+      const left=Math.min(dl.x0,ul.x0), right=Math.max(dl.x1,ul.x1);
+      const top=Math.min(dl.y0,ul.y0);
+      const cardWidth=Math.max(180,Math.abs(((ul.x0+ul.x1)/2)-((dl.x0+dl.x1)/2)));
+      const resultRight=right+cardWidth*0.95;
+      const resultBottom=top+Math.max(650,cardWidth*1.65);
+      const resultWords=words.filter(w=>{const b=bbox(w);if(!b)return false;const cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2;return cx>=left-cardWidth*.35&&cx<=resultRight&&cy>=top-120&&cy<=resultBottom;});
+      const pingLabel=resultWords.find(w=>/^ping$/i.test(String(w.text||'')));
+      if(pingLabel){
+        const pb=bbox(pingLabel),py=(pb.y0+pb.y1)/2;
+        const nums=resultWords.map(w=>({b:bbox(w),n:num(w.text)})).filter(x=>x.b&&x.n!==null&&x.n>=0&&x.n<5000&&Math.abs(((x.b.y0+x.b.y1)/2)-py)<100&&x.b.x0>=pb.x1-30).sort((a,b)=>a.b.x0-b.b.x0);
+        if(nums[0])out.idlePing=nums[0].n;if(nums[1])out.downloadPing=nums[1].n;if(nums[2])out.uploadPing=nums[2].n;
+      }
+      const jw=resultWords.find(w=>/^jitter$/i.test(String(w.text||'')));
+      if(jw){const jb=bbox(jw),jy=(jb.y0+jb.y1)/2;const nums=resultWords.map(w=>({b:bbox(w),n:num(w.text)})).filter(x=>x.b&&x.n!==null&&x.n>=0&&x.n<1000&&Math.abs(((x.b.y0+x.b.y1)/2)-jy)<75&&x.b.x0>=jb.x1-20).sort((a,b)=>a.b.x0-b.b.x0);if(nums[0])out.idleJitter=nums[0].n;}
+    }
+
+    if(respWords.length){
+      const maxY=Math.max(...words.map(w=>bbox(w)?.y1||0));
+      const cols={idle:/^idle$/i,download:/^download$/i,upload:/^upload$/i};
+      for(const [key,re] of Object.entries(cols)){
+        const labels=words.filter(w=>re.test(String(w.text||'')) && bbox(w) && bbox(w).y0>respY && bbox(w).y0<respY+(maxY-respY)*0.55);
+        if(!labels.length)continue;
+        // The lowest qualifying label is usually the responsiveness column label,
+        // while the speed-card Download/Upload labels sit above RESPONSONSIVENESS.
+        const lw=labels.sort((a,b)=>bbox(a).y0-bbox(b).y0)[0], l=bbox(lw);
+        const lx=(l.x0+l.x1)/2, ly=l.y1;
+        const nums=words.map(w=>({b:bbox(w),n:num(w.text)})).filter(x=>x.b&&x.n!==null&&x.n>=0&&x.n<5000);
+        let best=null;
+        for(const c of nums){
+          const cx=(c.b.x0+c.b.x1)/2,cy=(c.b.y0+c.b.y1)/2,dy=cy-ly,dx=Math.abs(cx-lx);
+          if(dy<0||dy>500)continue;
+          const score=dy+dx*1.7;
+          if(!best||score<best.score)best={score,n:c.n};
+        }
+        if(best){if(key==='idle')out.idlePing=best.n;else if(key==='download')out.downloadPing=best.n;else out.uploadPing=best.n;}
+      }
+
+      // Jitter appears once below each responsiveness column. Assign each Jitter
+      // to the closest column center, then take the number to its right/same row.
+      const colLabels={};
+      for(const [key,re] of Object.entries(cols)){
+        const a=words.filter(w=>re.test(String(w.text||''))&&bbox(w)&&bbox(w).y0>respY).sort((x,y)=>bbox(x).y0-bbox(y).y0);
+        if(a[0]){const b=bbox(a[0]);colLabels[key]=(b.x0+b.x1)/2;}
+      }
+      const jitterWords=words.filter(w=>/^jitter$/i.test(String(w.text||''))&&bbox(w)&&bbox(w).y0>respY);
+      for(const jw of jitterWords){
+        const jb=bbox(jw),jx=(jb.x0+jb.x1)/2,jy=(jb.y0+jb.y1)/2;
+        const candidates=words.map(w=>({b:bbox(w),n:num(w.text)})).filter(x=>x.b&&x.n!==null&&x.n>=0&&x.n<1000&&((x.b.y0+x.b.y1)/2)>=jy-35&&((x.b.y0+x.b.y1)/2)<=jy+55&&x.b.x0>=jb.x0);
+        candidates.sort((a,b)=>(Math.abs(((a.b.y0+a.b.y1)/2)-jy)+Math.max(0,a.b.x0-jb.x1))-(Math.abs(((b.b.y0+b.b.y1)/2)-jy)+Math.max(0,b.b.x0-jb.x1)));
+        if(!candidates[0])continue;
+        const ck=Object.entries(colLabels).sort((a,b)=>Math.abs(a[1]-jx)-Math.abs(b[1]-jx))[0]?.[0];
+        if(ck==='idle')out.idleJitter=candidates[0].n;else if(ck==='download')out.downloadJitter=candidates[0].n;else if(ck==='upload')out.uploadJitter=candidates[0].n;
+      }
+    }
+    return out;
+  }
+  function mergeSpeed(a,b){
+    const out={...(a||{})};
+    for(const [k,v] of Object.entries(b||{})){
+      if(v!==null&&v!==undefined&&v!==''&&(out[k]===null||out[k]===undefined||out[k]===''))out[k]=v;
+    }
+    return out;
+  }
+  function applySpeedSpatial(base,spatial){
+    const out={...(base||{})};
+    for(const k of ['download','upload','idlePing','downloadPing','uploadPing','idleJitter','downloadJitter','uploadJitter','packetLoss']){
+      const v=spatial?.[k];if(v!==null&&v!==undefined&&v!=='')out[k]=v;
+    }
+    return out;
+  }
+
+  const rank={Excellent:5,Good:4,Fair:3,Poor:2,'Very Poor':1,Unknown:0};
+  const emoji={Excellent:'🟢',Good:'🟡',Fair:'🟠',Poor:'🔴','Very Poor':'🔴',Unknown:'⚪'};
+  function grade(level){return {level,emoji:emoji[level]||'⚪',rank:rank[level]||0};}
+  function gradeDownload(v,tech){
+    if(v===null)return grade('Unknown');
+    const t=tech==='LTE'?'LTE':tech==='5G'?'5G':'OTHER';
+    if(t==='LTE')return grade(v>=100?'Excellent':v>=25?'Good':v>=10?'Fair':v>=3?'Poor':'Very Poor');
+    return grade(v>=200?'Excellent':v>=75?'Good':v>=25?'Fair':v>=5?'Poor':'Very Poor');
+  }
+  function gradeUpload(v,tech){
+    if(v===null)return grade('Unknown');
+    const t=tech==='LTE'?'LTE':tech==='5G'?'5G':'OTHER';
+    if(t==='LTE')return grade(v>=20?'Excellent':v>=8?'Good':v>=3?'Fair':v>=1?'Poor':'Very Poor');
+    return grade(v>=30?'Excellent':v>=10?'Good':v>=3?'Fair':v>=1?'Poor':'Very Poor');
+  }
+  function gradePing(v,loaded=false){
+    if(v===null)return grade('Unknown');
+    if(loaded)return grade(v<=50?'Excellent':v<=100?'Good':v<=150?'Fair':v<=250?'Poor':'Very Poor');
+    return grade(v<=30?'Excellent':v<=60?'Good':v<=100?'Fair':v<=200?'Poor':'Very Poor');
+  }
+  function gradeJitter(v){if(v===null)return grade('Unknown');return grade(v<=5?'Excellent':v<=10?'Good':v<=20?'Fair':v<=40?'Poor':'Very Poor');}
+  function gradeLoss(v){if(v===null)return grade('Unknown');return grade(v===0?'Excellent':v<=0.5?'Good':v<=1?'Fair':v<=3?'Poor':'Very Poor');}
+  function worst(...grades){const valid=grades.filter(g=>g&&g.rank);if(!valid.length)return grade('Unknown');return valid.reduce((a,b)=>a.rank<=b.rank?a:b);}
+
+  function metricCard(title,g,value,unit,desc,effect){
+    return `<div class="card" style="margin:10px 0;padding:14px">
+      <div style="font-weight:800;font-size:1.08em">${esc(title)}</div>
+      <div style="font-weight:800;margin:6px 0">${g.emoji} ${esc(g.level)}: ${value===null?'Unknown':esc(fmt(value,value<10?2:1))+' '+esc(unit)}</div>
+      <div>${esc(desc)}</div><div style="margin-top:4px"><b>Effect:</b> ${esc(effect)}</div>
+    </div>`;
+  }
+  function effectDownload(v,g){
+    if(v===null)return 'Download capacity could not be measured.';
+    if(v<1)return 'Extremely limited. Modern webpages crawl, music can pause, and even low-resolution video may buffer heavily.';
+    if(v<5)return 'Basic browsing works, but HD video and large downloads can buffer or stall.';
+    if(v<25)return 'Comfortable browsing and HD video are possible, but 4K or several simultaneous streams may struggle.';
+    if(v<100)return 'Strong everyday capacity for HD/4K streaming, apps, and large downloads.';
+    return 'Very high capacity. Multiple high-quality streams and large downloads should have ample bandwidth.';
+  }
+  function effectUpload(v,g){
+    if(v===null)return 'Upload capacity could not be measured.';
+    if(v<0.2)return 'Effectively unusable for sending files or live video. Video calls may freeze, fall back to audio, or disconnect.';
+    if(v<1)return 'Photos and files upload slowly. Video calls may become blurry, unstable, or audio-first.';
+    if(v<3)return 'Basic calls can work, but HD video calls, backups, and larger uploads may struggle.';
+    if(v<10)return 'Good for normal video calls, sharing photos, and cloud uploads.';
+    return 'Strong upload capacity for HD video calls, cloud backup, large files, and hotspot use.';
+  }
+  function effectPing(v,loaded){
+    if(v===null)return 'Latency was not available.';
+    if(v>300)return 'Severe delay. Conversations can feel half a beat behind, gaming feels unresponsive, and taps/actions take noticeably longer to reach the network.';
+    if(v>200)return 'Heavy delay is obvious in calls, gaming, and other interactive apps.';
+    if(v>100)return loaded?'Responsiveness degrades substantially while the connection is busy.':'Noticeable delay can appear in gaming and conversational traffic.';
+    if(v>60)return 'Usable, but interactive apps can feel less immediate.';
+    return 'Fast response time for calls, browsing, gaming, and interactive apps.';
+  }
+  function experienceCards(r){
+    const p=r.idlePing,lp=Math.max(r.downloadPing??-1,r.uploadPing??-1);const j=Math.max(r.idleJitter??-1,r.downloadJitter??-1,r.uploadJitter??-1);const loss=r.packetLoss;
+    const d=r.download,u=r.upload;
+    let calls,video,stream,gaming,browse,hotspot;
+    if((u!==null&&u<0.2)||(p!==null&&p>300)||(loss!==null&&loss>3))calls='Very poor. Expect large conversational delay, people talking over each other, choppy/robotic audio, gaps, and possible call failure on data-based calling.';
+    else if((p!==null&&p>150)||(j>=40)||(loss!==null&&loss>1))calls='Poor to fair. Voice may sound delayed or choppy, with occasional gaps when the connection is busy.';
+    else if((lp>150)||(j>=20))calls='Normally good, but heavy downloads/uploads can add noticeable voice delay or brief audio instability.';
+    else calls='Good. Voice should feel responsive and stable under normal conditions.';
+
+    if((u!==null&&u<0.5)||(d!==null&&d<1))video='Very poor. Expect frozen or heavily pixelated video, delayed speech, audio-only fallback, or disconnections.';
+    else if((u!==null&&u<3)||(d!==null&&d<5)||(p!==null&&p>200))video='Poor. Video calls may lower resolution, freeze, or develop noticeable talk-over delay.';
+    else if(lp>150||j>=30)video='Good capacity, but simultaneous heavy traffic can create freezes, quality drops, or delayed conversation.';
+    else video='Excellent for normal HD video calling, assuming the radio/network remains stable.';
+
+    if(d!==null&&d<1)stream='Very poor. Even 480p video can buffer heavily; higher resolutions are unrealistic without long pre-buffering.';
+    else if(d!==null&&d<5)stream='Poor. Low-resolution video may work, but HD playback is likely to buffer.';
+    else if(d!==null&&d<25)stream='Good for HD streaming. 4K or multiple streams can run short on capacity.';
+    else stream='Excellent raw capacity. Buffering from insufficient bandwidth should be unlikely.';
+
+    if((p!==null&&p>250)||(j>=40)||(loss!==null&&loss>2))gaming='Very poor. Expect major input lag, rubber-banding, delayed actions, and an inconsistent real-time experience.';
+    else if((p!==null&&p>100)||(j>=20))gaming='Fair to poor. Playable in slower games, but real-time/competitive games can feel laggy or inconsistent.';
+    else if(lp>150)gaming='Excellent when idle, but heavy transfers can sharply increase game latency.';
+    else gaming='Good to excellent responsiveness for online gaming.';
+
+    if((d!==null&&d<1)||(p!==null&&p>300))browse='Poor. Simple pages may load eventually, while image/video-heavy apps can stall or time out.';
+    else if((d!==null&&d<5)||(p!==null&&p>150))browse='Usable but sluggish. Pages and social feeds may pause while images or videos load.';
+    else browse='Fast everyday browsing, app loading, and social-media use.';
+
+    if((d!==null&&d<5)||(u!==null&&u<1))hotspot='Poor. There is little spare capacity to share, and additional devices can make everyone slower.';
+    else if(lp>150)hotspot='Strong bandwidth, but one device saturating the link can make other devices noticeably less responsive.';
+    else hotspot='Strong capacity and responsiveness for sharing the connection with other devices.';
+    return {calls,video,stream,gaming,browse,hotspot};
+  }
+
+  function renderSpeed(r,save=true){
+    const tech=r.connection||'Unknown';
+    const gd=gradeDownload(r.download,tech),gu=gradeUpload(r.upload,tech),gp=gradePing(r.idlePing),gdp=gradePing(r.downloadPing,true),gup=gradePing(r.uploadPing,true),gj=gradeJitter(r.idleJitter),gdlJ=gradeJitter(r.downloadJitter),gulJ=gradeJitter(r.uploadJitter),gl=gradeLoss(r.packetLoss);
+    const capacity=worst(gd,gu),responsive=worst(gp,gdp,gup,gj,gdlJ,gulJ,gl);const ex=experienceCards(r);
+    const out=document.getElementById('speedResults');if(!out)return;
+    out.innerHTML=`
+      <div class="card result ${capacity.level==='Very Poor'||capacity.level==='Poor'?'unknown':capacity.level==='Fair'?'prov':'ok'}">
+        <div style="font-size:1.35em;font-weight:900">${esc(tech)} Speed Test</div>
+        ${r.carrier?`<div class="small muted" style="margin-top:4px">Network: ${esc(r.carrier)}</div>`:''}
+        <div class="grid" style="margin-top:12px">
+          <div class="countbox"><span class="small muted">Speed Capacity</span><b>${capacity.emoji} ${esc(capacity.level)}</b></div>
+          <div class="countbox"><span class="small muted">Responsiveness</span><b>${responsive.emoji} ${esc(responsive.level)}</b></div>
+        </div>
+      </div>
+      ${metricCard('Download Speed',gd,r.download,'Mbps','Measures how quickly data reaches the device.',effectDownload(r.download,gd))}
+      ${metricCard('Upload Speed',gu,r.upload,'Mbps','Measures how quickly the device can send data.',effectUpload(r.upload,gu))}
+      ${metricCard('Idle Ping / Latency',gp,r.idlePing,'ms','Measures response time before the connection is heavily loaded.',effectPing(r.idlePing,false))}
+      ${r.downloadPing!==null?metricCard('Download-Loaded Latency',gdp,r.downloadPing,'ms','Measures responsiveness while download traffic is saturating the connection.',effectPing(r.downloadPing,true)):''}
+      ${r.uploadPing!==null?metricCard('Upload-Loaded Latency',gup,r.uploadPing,'ms','Measures responsiveness while upload traffic is saturating the connection.',effectPing(r.uploadPing,true)):''}
+      ${r.idleJitter!==null?metricCard('Idle Jitter',gj,r.idleJitter,'ms','Measures variation in packet timing. Lower and steadier is better.','High jitter can create choppy voice, uneven gaming response, and unstable live video.'):''}
+      ${r.downloadJitter!==null?metricCard('Download-Loaded Jitter',gdlJ,r.downloadJitter,'ms','Measures timing variation while downloading heavily.','Large spikes can cause audio/video hiccups and lag while the link is busy.'):''}
+      ${r.uploadJitter!==null?metricCard('Upload-Loaded Jitter',gulJ,r.uploadJitter,'ms','Measures timing variation while uploading heavily.','Large spikes can hurt outgoing voice/video quality during uploads.'):''}
+      ${r.packetLoss!==null?metricCard('Packet Loss',gl,r.packetLoss,'%','Measures packets that never reach their destination.','Packet loss directly causes missing audio, video artifacts, retransmissions, and gaming instability.'):''}
+      <div class="notice" style="margin-top:12px">
+        <div style="font-size:1.12em;font-weight:900;margin-bottom:8px">Expected Real-World Experience</div>
+        <div style="margin:6px 0">📞 <b>Voice / VoIP calls:</b> ${esc(ex.calls)}</div>
+        <div style="margin:6px 0">🎥 <b>Video calls:</b> ${esc(ex.video)}</div>
+        <div style="margin:6px 0">📺 <b>Streaming / buffering:</b> ${esc(ex.stream)}</div>
+        <div style="margin:6px 0">🎮 <b>Gaming:</b> ${esc(ex.gaming)}</div>
+        <div style="margin:6px 0">🌐 <b>Browsing / social media:</b> ${esc(ex.browse)}</div>
+        <div style="margin:6px 0">📡 <b>Hotspot use:</b> ${esc(ex.hotspot)}</div>
+      </div>`;
+    if(save)saveSpeedLocal({...r,capacity:capacity.level,responsiveness:responsive.level,savedAt:new Date().toISOString()});
+  }
+
+  function loadHistory(){try{return JSON.parse(localStorage.getItem(SPEED_HISTORY_KEY)||'[]')||[];}catch(e){return [];}}
+  function saveSpeedLocal(r){
+    const a=loadHistory();
+    const signature=[r.download,r.upload,r.idlePing,r.downloadPing,r.uploadPing,r.packetLoss,r.connection].join('|');
+    if(a[0]&&a[0]._sig===signature&&Date.now()-new Date(a[0].savedAt).getTime()<60000)return;
+    a.unshift({...r,_sig:signature});
+    localStorage.setItem(SPEED_HISTORY_KEY,JSON.stringify(a.slice(0,100)));
+    renderHistory();
+  }
+  function renderHistory(){
+    const host=document.getElementById('speedHistory');if(!host)return;const a=loadHistory();
+    if(!a.length){host.innerHTML='<div class="small muted">No speed tests saved on this device yet.</div>';return;}
+    host.innerHTML=a.slice(0,25).map((r,i)=>`<div class="record">
+      <div style="font-weight:800">${esc(r.connection||'Unknown')} • ${r.download===null?'?':esc(fmt(r.download,2))}↓ / ${r.upload===null?'?':esc(fmt(r.upload,2))}↑ Mbps</div>
+      <div class="small muted">${esc(new Date(r.savedAt).toLocaleString())}${r.idlePing!==null&&r.idlePing!==undefined?' • '+esc(fmt(r.idlePing,1))+' ms ping':''}${r.packetLoss!==null&&r.packetLoss!==undefined?' • '+esc(fmt(r.packetLoss,2))+'% loss':''}</div>
+    </div>`).join('');
+  }
+  function clearHistory(){if(confirm('Clear all speed tests saved on this device?')){localStorage.removeItem(SPEED_HISTORY_KEY);renderHistory();}}
+
+  function setSpeedFile(file){
+    if(!file)return;window._speedPastedFile=file;
+    const img=document.getElementById('speedPreview');const wrap=document.getElementById('speedPreviewWrap');
+    if(img&&wrap){img.src=URL.createObjectURL(file);wrap.classList.remove('hidden');}
+    const st=document.getElementById('speedStatus');if(st)st.textContent='Image ready. Tap Analyze Speed Test.';
+  }
+  async function pasteSpeed(){
+    const st=document.getElementById('speedStatus');
+    try{
+      if(!navigator.clipboard?.read)throw new Error('clipboard-read-unavailable');
+      const items=await navigator.clipboard.read();
+      for(const item of items){
+        const type=item.types.find(t=>t.startsWith('image/'));if(!type)continue;
+        const blob=await item.getType(type);const file=new File([blob],`speedtest-${Date.now()}.${type.includes('jpeg')?'jpg':'png'}`,{type});
+        try{const dt=new DataTransfer();dt.items.add(file);document.getElementById('speedImage').files=dt.files;}catch(e){}
+        setSpeedFile(file);return;
+      }
+      if(st)st.textContent='The current clipboard does not contain a photo.';
+    }catch(e){if(st)st.textContent='Safari blocked clipboard access. Paste into the box or choose the screenshot file instead.';}
+  }
+  function clearSpeed(){
+    window._speedPastedFile=null;const i=document.getElementById('speedImage');if(i)i.value='';
+    const w=document.getElementById('speedPreviewWrap');if(w)w.classList.add('hidden');
+    const r=document.getElementById('speedResults');if(r)r.innerHTML='';const s=document.getElementById('speedStatus');if(s)s.textContent='';
+  }
+  async function analyzeImage(){
+    const input=document.getElementById('speedImage');const file=(input?.files&&input.files[0])||window._speedPastedFile;
+    const st=document.getElementById('speedStatus'),btn=document.getElementById('speedRunBtn');
+    if(!file){if(st)st.textContent='Choose or paste a Speedtest screenshot first.';return;}
+    if(!window.Tesseract){if(st)st.textContent=navigator.onLine?'OCR engine did not load.':'Offline OCR cache is incomplete. Reconnect once, then retry.';return;}
+    btn.disabled=true;
+    try{
+      if(st)st.textContent='Reading Speedtest screenshot…';
+      let enhanced=file;try{if(typeof makeEnhancedImage==='function')enhanced=await makeEnhancedImage(file);}catch(e){}
+      const r1=await Tesseract.recognize(enhanced,'eng',{...OCR_REMOTE_SPEED,logger:m=>{if(m.status==='recognizing text'&&st)st.textContent=`Enhanced speed scan ${Math.round((m.progress||0)*100)}%…`; }},{blocks:true,tsv:true});
+      const d1=r1?.data||{};let parsed=applySpeedSpatial(parseSpeedText(d1.text||''),parseSpeedSpatial(d1));
+      const r2=await Tesseract.recognize(file,'eng',{...OCR_REMOTE_SPEED,logger:m=>{if(m.status==='recognizing text'&&st)st.textContent=`Original speed scan ${Math.round((m.progress||0)*100)}%…`; }},{blocks:true,tsv:true});
+      const d2=r2?.data||{};parsed=mergeSpeed(parsed,parseSpeedText(d2.text||''));parsed=applySpeedSpatial(parsed,parseSpeedSpatial(d2));
+      const override=document.getElementById('speedConnectionOverride')?.value||'';if(override)parsed.connection=override;
+      // Sanity filters prevent dates/test IDs from becoming performance metrics.
+      ['download','upload'].forEach(k=>{if(parsed[k]!==null&&(parsed[k]<0||parsed[k]>100000))parsed[k]=null;});
+      ['idlePing','downloadPing','uploadPing','idleJitter','downloadJitter','uploadJitter'].forEach(k=>{if(parsed[k]!==null&&(parsed[k]<0||parsed[k]>10000))parsed[k]=null;});
+      if(parsed.packetLoss!==null&&(parsed.packetLoss<0||parsed.packetLoss>100))parsed.packetLoss=null;
+      renderSpeed(parsed,true);
+      const misses=[];if(parsed.download===null)misses.push('download');if(parsed.upload===null)misses.push('upload');if(parsed.idlePing===null)misses.push('ping');
+      if(st)st.textContent=misses.length?`Analysis complete. OCR missed: ${misses.join(', ')}.`:'Analysis complete. Saved locally on this device.';
+    }catch(e){if(st)st.textContent=`Speedtest OCR failed: ${String(e?.message||e||'unknown error').replace(/\s+/g,' ').slice(0,120)}`;}
+    finally{btn.disabled=false;}
+  }
+
+  function pastedFromEvent(e){
+    const items=[...(e.clipboardData?.items||[])];const it=items.find(x=>String(x.type||'').startsWith('image/'));if(!it)return;
+    const f=it.getAsFile();if(f){e.preventDefault();setSpeedFile(f);}
+  }
+  document.addEventListener('DOMContentLoaded',()=>{
+    document.getElementById('speedImage')?.addEventListener('change',e=>setSpeedFile(e.target.files?.[0]));
+    document.getElementById('speedPasteBtn')?.addEventListener('click',pasteSpeed);
+    document.getElementById('speedPasteTarget')?.addEventListener('paste',pastedFromEvent);
+    document.getElementById('speedRunBtn')?.addEventListener('click',analyzeImage);
+    document.getElementById('speedClearBtn')?.addEventListener('click',clearSpeed);
+    document.getElementById('speedRefreshHistoryBtn')?.addEventListener('click',renderHistory);
+    document.getElementById('speedClearHistoryBtn')?.addEventListener('click',clearHistory);
+    renderHistory();
+  });
+
+  // Exposed for regression tests only. It does not sync or mutate the tower registry.
+  window.__speedAnalyzerTest={speedResultText,parseSpeedText,parseSpeedSpatial,gradeDownload,gradeUpload,gradePing,gradeJitter,gradeLoss,experienceCards,cleanTech};
 })();
 </script>
 

@@ -1,4 +1,4 @@
-const CACHE='mctr-current58-roaming-aware-registry-mismatch-offline-sync-v1';
+const CACHE='mctr-current62-speedtest-result-region-lock-offline-ocr-v1';
 
 const CORE=[
  './',
