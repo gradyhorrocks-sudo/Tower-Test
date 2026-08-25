@@ -568,15 +568,6 @@ Map pin colors:
 <div id="speedResults" style="margin-top:12px"></div>
 </div>
 
-<div class="card">
-<h3>Saved on This Device</h3>
-<p class="muted small">Speed-test history is local only. It is intentionally separate from tower-registry cloud sync. Cloud support can be added later without changing the saved record format.</p>
-<div class="row">
-  <button type="button" class="secondary" id="speedRefreshHistoryBtn">Refresh History</button>
-  <button type="button" class="danger" id="speedClearHistoryBtn">Clear Local Speed Tests</button>
-</div>
-<div id="speedHistory" style="margin-top:12px"></div>
-</div>
 </section>
 
 <section id="tab-add" class="hidden">
@@ -6589,7 +6580,7 @@ runOcrBtn.addEventListener('click',async()=>{
  try{
    document.getElementById('ocrStatus').textContent='Scanning and autofilling fields…';
    const enhanced=await makeEnhancedImage(f);
-   // Current 62 pins the OCR runtime to the same URLs pre-cached by sw.js.
+   // Current 63 pins the OCR runtime to the same URLs pre-cached by sw.js.
    // The non-SIMD LSTM core is intentionally selected for broad Safari/iPhone
    // compatibility. Once cached, every request below is satisfied offline.
    const OCR_REMOTE={
@@ -6653,7 +6644,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 62';
+  const BUILD='Current 63';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
@@ -6905,7 +6896,6 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
 <script>
 (function(){
   'use strict';
-  const SPEED_HISTORY_KEY='mctrSpeedTestsLocalV1';
   const OCR_REMOTE_SPEED={
     workerPath:'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',
     corePath:'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1/tesseract-core-lstm.wasm.js',
@@ -6915,7 +6905,12 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
 
   const num=v=>{
     if(v===null||v===undefined)return null;
-    const m=String(v).replace(/,/g,'.').match(/-?\d+(?:\.\d+)?/);
+    // Speedtest uses a very thin condensed font. OCR commonly reads the digit 1
+    // as I, l or | (for example 771 -> 77I). Normalize only tokens that are
+    // otherwise numeric so ordinary words are never converted into measurements.
+    let t=String(v).trim().replace(/,/g,'.');
+    if(/^[+\-]?[0-9Il|]+(?:\.[0-9Il|]+)?$/.test(t))t=t.replace(/[Il|]/g,'1');
+    const m=t.match(/-?\d+(?:\.\d+)?/);
     if(!m)return null;
     const n=Number(m[0]);
     return Number.isFinite(n)?n:null;
@@ -6962,7 +6957,14 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
       pingChunk=pingChunk.split(/\b(?:Jitter|Packet\s*Loss|Connections?|Server|Device)\b/i)[0].replace(/,/g,'.');
       pingNums=[...pingChunk.matchAll(/(?<![A-Za-z])(-?\d+(?:\.\d+)?)(?![A-Za-z])/g)].map(x=>Number(x[1])).filter(v=>Number.isFinite(v)&&v>=0&&v<5000);
     }
-    if(pingNums.length){out.idlePing=pingNums[0]; if(pingNums.length>1)out.downloadPing=pingNums[1]; if(pingNums.length>2)out.uploadPing=pingNums[2];}
+    if(pingNums.length){
+      out.idlePing=pingNums[0];
+      // Loaded latency positions are meaningful only when OCR captured the full
+      // Idle / Download / Upload trio. If one condensed number was missed, do
+      // not shift the remaining value into the wrong column. Spatial parsing may
+      // still recover either loaded value independently.
+      if(pingNums.length>=3){out.downloadPing=pingNums[1];out.uploadPing=pingNums[2];}
+    }
 
     // Detailed layout often has three Jitter rows in Idle / Download / Upload order.
     const jit=[];
@@ -7018,7 +7020,7 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
     const out={};
     // Detailed Ookla results screen: find the RESPONSIVENESS/PING region first.
     // Speed-card Download/Upload labels are above it; responsiveness columns are below it.
-    const respWords=words.filter(w=>/^(responsiveness|ping)$/i.test(String(w.text||'')) && bbox(w));
+    const respWords=words.filter(w=>/^responsiveness$/i.test(String(w.text||'')) && bbox(w));
     const respY=respWords.length?Math.min(...respWords.map(w=>bbox(w).y0)):null;
     function speedCardValue(re){
       const subset=respY===null?words:words.filter(w=>!bbox(w)||bbox(w).y0<respY);
@@ -7047,8 +7049,17 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
       const pingLabel=resultWords.find(w=>/^ping$/i.test(String(w.text||'')));
       if(pingLabel){
         const pb=bbox(pingLabel),py=(pb.y0+pb.y1)/2;
-        const nums=resultWords.map(w=>({b:bbox(w),n:num(w.text)})).filter(x=>x.b&&x.n!==null&&x.n>=0&&x.n<5000&&Math.abs(((x.b.y0+x.b.y1)/2)-py)<100&&x.b.x0>=pb.x1-30).sort((a,b)=>a.b.x0-b.b.x0);
-        if(nums[0])out.idlePing=nums[0].n;if(nums[1])out.downloadPing=nums[1].n;if(nums[2])out.uploadPing=nums[2].n;
+        const nums=resultWords.map(w=>({b:bbox(w),n:num(w.text),text:String(w.text||'')})).filter(x=>x.b&&x.n!==null&&x.n>=0&&x.n<5000&&Math.abs(((x.b.y0+x.b.y1)/2)-py)<50&&x.b.x0>=pb.x1-15).sort((a,b)=>a.b.x0-b.b.x0);
+        // Compact/tablet row order is fixed by Ookla: Idle, Download-loaded,
+        // Upload-loaded. Never duplicate or shift a surviving value when OCR
+        // misses another column. The num() helper also repairs 77I/77l -> 771.
+        if(nums[0])out.idlePing=nums[0].n;
+        if(nums.length>=3){out.downloadPing=nums[1].n;out.uploadPing=nums[2].n;}
+        else if(nums.length===2){
+          // With only two recognized numbers, retain idle and leave loaded values
+          // unknown rather than guessing which loaded column survived.
+          out.downloadPing=null;out.uploadPing=null;
+        }
       }
       const jw=resultWords.find(w=>/^jitter$/i.test(String(w.text||'')));
       if(jw){const jb=bbox(jw),jy=(jb.y0+jb.y1)/2;const nums=resultWords.map(w=>({b:bbox(w),n:num(w.text)})).filter(x=>x.b&&x.n!==null&&x.n>=0&&x.n<1000&&Math.abs(((x.b.y0+x.b.y1)/2)-jy)<75&&x.b.x0>=jb.x1-20).sort((a,b)=>a.b.x0-b.b.x0);if(nums[0])out.idleJitter=nums[0].n;}
@@ -7198,16 +7209,15 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
     return {calls,video,stream,gaming,browse,hotspot};
   }
 
-  function renderSpeed(r,save=true){
+  function renderSpeed(r){
     const tech=r.connection||'Unknown';
     const gd=gradeDownload(r.download,tech),gu=gradeUpload(r.upload,tech),gp=gradePing(r.idlePing),gdp=gradePing(r.downloadPing,true),gup=gradePing(r.uploadPing,true),gj=gradeJitter(r.idleJitter),gdlJ=gradeJitter(r.downloadJitter),gulJ=gradeJitter(r.uploadJitter),gl=gradeLoss(r.packetLoss);
     const capacity=worst(gd,gu),responsive=worst(gp,gdp,gup,gj,gdlJ,gulJ,gl);const ex=experienceCards(r);
     const out=document.getElementById('speedResults');if(!out)return;
     out.innerHTML=`
       <div class="card result ${capacity.level==='Very Poor'||capacity.level==='Poor'?'unknown':capacity.level==='Fair'?'prov':'ok'}">
-        <div style="font-size:1.35em;font-weight:900">${esc(tech)} Speed Test</div>
-        ${r.carrier?`<div class="small muted" style="margin-top:4px">Network: ${esc(r.carrier)}</div>`:''}
-        <div class="grid" style="margin-top:12px">
+        ${(tech!=='Unknown'||r.carrier)?`<div class="small muted" style="margin-bottom:8px">${tech!=='Unknown'?`Connection: ${esc(tech)}`:''}${tech!=='Unknown'&&r.carrier?' • ':''}${r.carrier?`Network: ${esc(r.carrier)}`:''}</div>`:''}
+        <div class="grid" style="margin-top:4px">
           <div class="countbox"><span class="small muted">Speed Capacity</span><b>${capacity.emoji} ${esc(capacity.level)}</b></div>
           <div class="countbox"><span class="small muted">Responsiveness</span><b>${responsive.emoji} ${esc(responsive.level)}</b></div>
         </div>
@@ -7230,27 +7240,7 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
         <div style="margin:6px 0">🌐 <b>Browsing / social media:</b> ${esc(ex.browse)}</div>
         <div style="margin:6px 0">📡 <b>Hotspot use:</b> ${esc(ex.hotspot)}</div>
       </div>`;
-    if(save)saveSpeedLocal({...r,capacity:capacity.level,responsiveness:responsive.level,savedAt:new Date().toISOString()});
   }
-
-  function loadHistory(){try{return JSON.parse(localStorage.getItem(SPEED_HISTORY_KEY)||'[]')||[];}catch(e){return [];}}
-  function saveSpeedLocal(r){
-    const a=loadHistory();
-    const signature=[r.download,r.upload,r.idlePing,r.downloadPing,r.uploadPing,r.packetLoss,r.connection].join('|');
-    if(a[0]&&a[0]._sig===signature&&Date.now()-new Date(a[0].savedAt).getTime()<60000)return;
-    a.unshift({...r,_sig:signature});
-    localStorage.setItem(SPEED_HISTORY_KEY,JSON.stringify(a.slice(0,100)));
-    renderHistory();
-  }
-  function renderHistory(){
-    const host=document.getElementById('speedHistory');if(!host)return;const a=loadHistory();
-    if(!a.length){host.innerHTML='<div class="small muted">No speed tests saved on this device yet.</div>';return;}
-    host.innerHTML=a.slice(0,25).map((r,i)=>`<div class="record">
-      <div style="font-weight:800">${esc(r.connection||'Unknown')} • ${r.download===null?'?':esc(fmt(r.download,2))}↓ / ${r.upload===null?'?':esc(fmt(r.upload,2))}↑ Mbps</div>
-      <div class="small muted">${esc(new Date(r.savedAt).toLocaleString())}${r.idlePing!==null&&r.idlePing!==undefined?' • '+esc(fmt(r.idlePing,1))+' ms ping':''}${r.packetLoss!==null&&r.packetLoss!==undefined?' • '+esc(fmt(r.packetLoss,2))+'% loss':''}</div>
-    </div>`).join('');
-  }
-  function clearHistory(){if(confirm('Clear all speed tests saved on this device?')){localStorage.removeItem(SPEED_HISTORY_KEY);renderHistory();}}
 
   function setSpeedFile(file){
     if(!file)return;window._speedPastedFile=file;
@@ -7295,9 +7285,9 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
       ['download','upload'].forEach(k=>{if(parsed[k]!==null&&(parsed[k]<0||parsed[k]>100000))parsed[k]=null;});
       ['idlePing','downloadPing','uploadPing','idleJitter','downloadJitter','uploadJitter'].forEach(k=>{if(parsed[k]!==null&&(parsed[k]<0||parsed[k]>10000))parsed[k]=null;});
       if(parsed.packetLoss!==null&&(parsed.packetLoss<0||parsed.packetLoss>100))parsed.packetLoss=null;
-      renderSpeed(parsed,true);
+      renderSpeed(parsed);
       const misses=[];if(parsed.download===null)misses.push('download');if(parsed.upload===null)misses.push('upload');if(parsed.idlePing===null)misses.push('ping');
-      if(st)st.textContent=misses.length?`Analysis complete. OCR missed: ${misses.join(', ')}.`:'Analysis complete. Saved locally on this device.';
+      if(st)st.textContent=misses.length?`Analysis complete. OCR missed: ${misses.join(', ')}.`:'Analysis complete.';
     }catch(e){if(st)st.textContent=`Speedtest OCR failed: ${String(e?.message||e||'unknown error').replace(/\s+/g,' ').slice(0,120)}`;}
     finally{btn.disabled=false;}
   }
@@ -7312,9 +7302,6 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
     document.getElementById('speedPasteTarget')?.addEventListener('paste',pastedFromEvent);
     document.getElementById('speedRunBtn')?.addEventListener('click',analyzeImage);
     document.getElementById('speedClearBtn')?.addEventListener('click',clearSpeed);
-    document.getElementById('speedRefreshHistoryBtn')?.addEventListener('click',renderHistory);
-    document.getElementById('speedClearHistoryBtn')?.addEventListener('click',clearHistory);
-    renderHistory();
   });
 
   // Exposed for regression tests only. It does not sync or mutate the tower registry.
