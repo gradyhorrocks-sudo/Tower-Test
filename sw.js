@@ -1,4 +1,4 @@
-const CACHE='mctr-current64-speedtest-decimal-reconcile-offline-ocr-v1';
+const CACHE='mctr-current61-speedtest-result-region-lock-offline-ocr-v1';
 
 const CORE=[
  './',

@@ -568,6 +568,15 @@ Map pin colors:
 <div id="speedResults" style="margin-top:12px"></div>
 </div>
 
+<div class="card">
+<h3>Saved on This Device</h3>
+<p class="muted small">Speed-test history is local only. It is intentionally separate from tower-registry cloud sync. Cloud support can be added later without changing the saved record format.</p>
+<div class="row">
+  <button type="button" class="secondary" id="speedRefreshHistoryBtn">Refresh History</button>
+  <button type="button" class="danger" id="speedClearHistoryBtn">Clear Local Speed Tests</button>
+</div>
+<div id="speedHistory" style="margin-top:12px"></div>
+</div>
 </section>
 
 <section id="tab-add" class="hidden">
@@ -6580,7 +6589,7 @@ runOcrBtn.addEventListener('click',async()=>{
  try{
    document.getElementById('ocrStatus').textContent='Scanning and autofilling fields…';
    const enhanced=await makeEnhancedImage(f);
-   // Current 64 pins the OCR runtime to the same URLs pre-cached by sw.js.
+   // Current 61 pins the OCR runtime to the same URLs pre-cached by sw.js.
    // The non-SIMD LSTM core is intentionally selected for broad Safari/iPhone
    // compatibility. Once cached, every request below is satisfied offline.
    const OCR_REMOTE={
@@ -6644,7 +6653,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 64';
+  const BUILD='Current 61';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
@@ -6896,6 +6905,7 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
 <script>
 (function(){
   'use strict';
+  const SPEED_HISTORY_KEY='mctrSpeedTestsLocalV1';
   const OCR_REMOTE_SPEED={
     workerPath:'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',
     corePath:'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1/tesseract-core-lstm.wasm.js',
@@ -6905,12 +6915,7 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
 
   const num=v=>{
     if(v===null||v===undefined)return null;
-    // Speedtest uses a very thin condensed font. OCR commonly reads the digit 1
-    // as I, l or | (for example 771 -> 77I). Normalize only tokens that are
-    // otherwise numeric so ordinary words are never converted into measurements.
-    let t=String(v).trim().replace(/,/g,'.');
-    if(/^[+\-]?[0-9Il|]+(?:\.[0-9Il|]+)?$/.test(t))t=t.replace(/[Il|]/g,'1');
-    const m=t.match(/-?\d+(?:\.\d+)?/);
+    const m=String(v).replace(/,/g,'.').match(/-?\d+(?:\.\d+)?/);
     if(!m)return null;
     const n=Number(m[0]);
     return Number.isFinite(n)?n:null;
@@ -6945,7 +6950,7 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
   }
   function parseSpeedText(raw){
     const text=speedResultText(raw);
-    const out={rawText:text,connection:cleanTech(text),download:null,upload:null,idlePing:null,downloadPing:null,uploadPing:null,idleJitter:null,downloadJitter:null,uploadJitter:null,packetLoss:null,carrier:'',server:'',device:''};
+    const out={rawText:text,connection:cleanTech(text),download:null,upload:null,idlePing:null,downloadPing:null,uploadPing:null,idleJitter:null,downloadJitter:null,uploadJitter:null,packetLoss:null,carrier:'',server:''};
     out.download=metricAfter(text,'\\bDOWNLOAD\\b',120);
     out.upload=metricAfter(text,'\\bUPLOAD\\b',120);
 
@@ -6957,14 +6962,7 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
       pingChunk=pingChunk.split(/\b(?:Jitter|Packet\s*Loss|Connections?|Server|Device)\b/i)[0].replace(/,/g,'.');
       pingNums=[...pingChunk.matchAll(/(?<![A-Za-z])(-?\d+(?:\.\d+)?)(?![A-Za-z])/g)].map(x=>Number(x[1])).filter(v=>Number.isFinite(v)&&v>=0&&v<5000);
     }
-    if(pingNums.length){
-      out.idlePing=pingNums[0];
-      // Loaded latency positions are meaningful only when OCR captured the full
-      // Idle / Download / Upload trio. If one condensed number was missed, do
-      // not shift the remaining value into the wrong column. Spatial parsing may
-      // still recover either loaded value independently.
-      if(pingNums.length>=3){out.downloadPing=pingNums[1];out.uploadPing=pingNums[2];}
-    }
+    if(pingNums.length){out.idlePing=pingNums[0]; if(pingNums.length>1)out.downloadPing=pingNums[1]; if(pingNums.length>2)out.uploadPing=pingNums[2];}
 
     // Detailed layout often has three Jitter rows in Idle / Download / Upload order.
     const jit=[];
@@ -6979,7 +6977,6 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
     const carriers=[['T-Mobile',/\bT[\s-]?Mobile\b/i],['STRATA Networks',/\bStrata(?:\s+Networks)?\b/i],['AT&T',/\bAT&T\b/i],['Verizon',/\bVerizon\b/i],['Union Wireless',/\bUnion\s+Wireless\b/i]];
     for(const [name,re] of carriers){if(re.test(text)){out.carrier=name;break;}}
     const srv=text.match(/(?:Server|Connections?)\s*[:]?\s*([^\n]{2,80})/i);if(srv)out.server=srv[1].trim();
-    const dev=text.match(/\b(iPad(?:\s+Pro)?[^\n]{0,45}|iPhone[^\n]{0,45}|Android[^\n]{0,45})/i);if(dev)out.device=dev[1].trim();
     return out;
   }
 
@@ -7020,7 +7017,7 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
     const out={};
     // Detailed Ookla results screen: find the RESPONSIVENESS/PING region first.
     // Speed-card Download/Upload labels are above it; responsiveness columns are below it.
-    const respWords=words.filter(w=>/^responsiveness$/i.test(String(w.text||'')) && bbox(w));
+    const respWords=words.filter(w=>/^(responsiveness|ping)$/i.test(String(w.text||'')) && bbox(w));
     const respY=respWords.length?Math.min(...respWords.map(w=>bbox(w).y0)):null;
     function speedCardValue(re){
       const subset=respY===null?words:words.filter(w=>!bbox(w)||bbox(w).y0<respY);
@@ -7031,40 +7028,6 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
 
     // Detailed Ookla results screen: bind Idle / Download / Upload to the number
     // directly under each responsiveness column.
-    // Compact/tablet Speedtest layout (including iPad): Download and Upload cards
-    // live in the upper-left result panel while ads may occupy the upper-right.
-    // Build a result-only bounding region from the Download/Upload labels and reject
-    // numerics far outside that region before reading the compact Ping/Jitter row.
-    const dlLabels=words.filter(w=>/^download$/i.test(String(w.text||''))&&bbox(w));
-    const ulLabels=words.filter(w=>/^upload$/i.test(String(w.text||''))&&bbox(w));
-    if(dlLabels.length&&ulLabels.length&&!respWords.length){
-      const dl=bbox(dlLabels.sort((a,b)=>bbox(a).y0-bbox(b).y0)[0]);
-      const ul=bbox(ulLabels.sort((a,b)=>bbox(a).y0-bbox(b).y0)[0]);
-      const left=Math.min(dl.x0,ul.x0), right=Math.max(dl.x1,ul.x1);
-      const top=Math.min(dl.y0,ul.y0);
-      const cardWidth=Math.max(180,Math.abs(((ul.x0+ul.x1)/2)-((dl.x0+dl.x1)/2)));
-      const resultRight=right+cardWidth*0.95;
-      const resultBottom=top+Math.max(650,cardWidth*1.65);
-      const resultWords=words.filter(w=>{const b=bbox(w);if(!b)return false;const cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2;return cx>=left-cardWidth*.35&&cx<=resultRight&&cy>=top-120&&cy<=resultBottom;});
-      const pingLabel=resultWords.find(w=>/^ping$/i.test(String(w.text||'')));
-      if(pingLabel){
-        const pb=bbox(pingLabel),py=(pb.y0+pb.y1)/2;
-        const nums=resultWords.map(w=>({b:bbox(w),n:num(w.text),text:String(w.text||'')})).filter(x=>x.b&&x.n!==null&&x.n>=0&&x.n<5000&&Math.abs(((x.b.y0+x.b.y1)/2)-py)<50&&x.b.x0>=pb.x1-15).sort((a,b)=>a.b.x0-b.b.x0);
-        // Compact/tablet row order is fixed by Ookla: Idle, Download-loaded,
-        // Upload-loaded. Never duplicate or shift a surviving value when OCR
-        // misses another column. The num() helper also repairs 77I/77l -> 771.
-        if(nums[0])out.idlePing=nums[0].n;
-        if(nums.length>=3){out.downloadPing=nums[1].n;out.uploadPing=nums[2].n;}
-        else if(nums.length===2){
-          // With only two recognized numbers, retain idle and leave loaded values
-          // unknown rather than guessing which loaded column survived.
-          out.downloadPing=null;out.uploadPing=null;
-        }
-      }
-      const jw=resultWords.find(w=>/^jitter$/i.test(String(w.text||'')));
-      if(jw){const jb=bbox(jw),jy=(jb.y0+jb.y1)/2;const nums=resultWords.map(w=>({b:bbox(w),n:num(w.text)})).filter(x=>x.b&&x.n!==null&&x.n>=0&&x.n<1000&&Math.abs(((x.b.y0+x.b.y1)/2)-jy)<75&&x.b.x0>=jb.x1-20).sort((a,b)=>a.b.x0-b.b.x0);if(nums[0])out.idleJitter=nums[0].n;}
-    }
-
     if(respWords.length){
       const maxY=Math.max(...words.map(w=>bbox(w)?.y1||0));
       const cols={idle:/^idle$/i,download:/^download$/i,upload:/^upload$/i};
@@ -7116,88 +7079,6 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
     const out={...(base||{})};
     for(const k of ['download','upload','idlePing','downloadPing','uploadPing','idleJitter','downloadJitter','uploadJitter','packetLoss']){
       const v=spatial?.[k];if(v!==null&&v!==undefined&&v!=='')out[k]=v;
-    }
-    return out;
-  }
-
-  // Ookla's thin decimal point is much easier for OCR to DROP than to invent.
-  // Keep all independent OCR candidates for speed-card values, then reconcile
-  // factor-of-10 disagreements instead of letting the last OCR pass overwrite
-  // a correct decimal (17.5 -> 175, 14.1 -> 141).
-  function speedCandidate(v){
-    const n=Number(v);return Number.isFinite(n)&&n>=0&&n<=100000?n:null;
-  }
-  function closeSpeed(a,b){
-    a=speedCandidate(a);b=speedCandidate(b);if(a===null||b===null)return false;
-    return Math.abs(a-b)<=Math.max(.06,Math.min(a,b)*.006);
-  }
-  function decimalDigits(v){
-    const s=String(v??'');const i=s.indexOf('.');return i<0?0:s.length-i-1;
-  }
-  function reconcileSpeedMetric(candidates){
-    const reads=(candidates||[]).map(raw=>({raw,n:speedCandidate(raw)})).filter(x=>x.n!==null);
-    if(!reads.length)return null;
-    // Agreement between independent reads beats every heuristic.
-    for(let i=0;i<reads.length;i++)for(let j=i+1;j<reads.length;j++)if(closeSpeed(reads[i].n,reads[j].n))return (reads[i].n+reads[j].n)/2;
-    // If reads disagree almost exactly 10x, prefer the decimal-bearing reading.
-    // This addresses the observed Ookla condensed-font failure where the tiny
-    // point disappears (17.5=>175 / 14.1=>141). Do NOT fabricate a decimal when
-    // none of the independent reads actually saw one.
-    for(let i=0;i<reads.length;i++)for(let j=i+1;j<reads.length;j++){
-      const a=reads[i],b=reads[j],hi=Math.max(a.n,b.n),lo=Math.min(a.n,b.n);
-      if(lo>0&&Math.abs(hi/lo-10)<0.035){
-        const da=decimalDigits(a.raw),db=decimalDigits(b.raw);
-        if(da>0&&db===0)return a.n;
-        if(db>0&&da===0)return b.n;
-      }
-    }
-    // Otherwise retain the first enhanced/spatial candidate. That is safer than
-    // allowing the second full-image pass to silently replace an existing value.
-    return reads[0].n;
-  }
-
-  function speedCardCropBoxes(data,imgW,imgH){
-    const words=speedWords(data).filter(w=>bbox(w));
-    const dl=words.filter(w=>/^download$/i.test(String(w.text||''))).sort((a,b)=>bbox(a).y0-bbox(b).y0)[0];
-    const ul=words.filter(w=>/^upload$/i.test(String(w.text||''))).sort((a,b)=>bbox(a).y0-bbox(b).y0)[0];
-    if(!dl&&!ul)return {};
-    const db=dl?bbox(dl):null,ub=ul?bbox(ul):null;
-    let spacing=0;
-    if(db&&ub)spacing=Math.abs(((ub.x0+ub.x1)/2)-((db.x0+db.x1)/2));
-    if(!spacing||spacing<100)spacing=Math.max(180,(Number(imgW)||1200)*.18);
-    function box(b){
-      if(!b)return null;
-      const lh=Math.max(12,b.y1-b.y0),w=Math.max(170,spacing*1.08),h=Math.max(105,spacing*.68,lh*7.2);
-      const x=Math.max(0,b.x0-spacing*.16),y=Math.max(0,b.y0-lh*.9);
-      return {x:Math.round(x),y:Math.round(y),w:Math.round(Math.min(w,(imgW||x+w)-x)),h:Math.round(Math.min(h,(imgH||y+h)-y))};
-    }
-    return {download:box(db),upload:box(ub)};
-  }
-  function speedCardNumberFromText(text){
-    const t=String(text||'').replace(/,/g,'.').replace(/[Il|]/g,'1');
-    // Prefer a decimal token. If the card truly shows an integer, accept it too.
-    const dec=t.match(/(?<![A-Za-z])\d{1,5}\.\d{1,3}(?![A-Za-z])/);
-    if(dec)return num(dec[0]);
-    const vals=[...t.matchAll(/(?<![A-Za-z])(\d{1,5})(?![A-Za-z])/g)].map(m=>num(m[1])).filter(v=>v!==null&&v<=100000);
-    return vals.length?vals.sort((a,b)=>b-a)[0]:null;
-  }
-  async function targetedSpeedCardOcr(file,data,statusEl){
-    const words=speedWords(data);if(!words.length)return {};
-    const img=await new Promise((resolve,reject)=>{const i=new Image(),u=URL.createObjectURL(file);i.onload=()=>{URL.revokeObjectURL(u);resolve(i);};i.onerror=()=>{URL.revokeObjectURL(u);reject(new Error('Speed card image load failed'));};i.src=u;});
-    const boxes=speedCardCropBoxes(data,img.naturalWidth||img.width,img.naturalHeight||img.height),out={};
-    for(const key of ['download','upload']){
-      const b=boxes[key];if(!b||b.w<20||b.h<20)continue;
-      const c=document.createElement('canvas'),scale=2;c.width=b.w*scale;c.height=b.h*scale;
-      const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.drawImage(img,b.x,b.y,b.w,b.h,0,0,c.width,c.height);
-      // Gentle contrast only. Tiny Ookla decimal points survive this better than
-      // the aggressive full-screen threshold used by the tower screenshot OCR.
-      const id=ctx.getImageData(0,0,c.width,c.height),px=id.data;
-      for(let i=0;i<px.length;i+=4){const g=.299*px[i]+.587*px[i+1]+.114*px[i+2];const v=Math.max(0,Math.min(255,(g-42)*1.55));px[i]=px[i+1]=px[i+2]=v;}
-      ctx.putImageData(id,0,0);
-      const blob=await new Promise(resolve=>c.toBlob(resolve,'image/png',1));if(!blob)continue;
-      if(statusEl)statusEl.textContent=`Checking ${key} decimal…`;
-      const rr=await Tesseract.recognize(blob,'eng',{...OCR_REMOTE_SPEED});
-      const v=speedCardNumberFromText(rr?.data?.text||'');if(v!==null)out[key]=v;
     }
     return out;
   }
@@ -7291,15 +7172,16 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
     return {calls,video,stream,gaming,browse,hotspot};
   }
 
-  function renderSpeed(r){
+  function renderSpeed(r,save=true){
     const tech=r.connection||'Unknown';
     const gd=gradeDownload(r.download,tech),gu=gradeUpload(r.upload,tech),gp=gradePing(r.idlePing),gdp=gradePing(r.downloadPing,true),gup=gradePing(r.uploadPing,true),gj=gradeJitter(r.idleJitter),gdlJ=gradeJitter(r.downloadJitter),gulJ=gradeJitter(r.uploadJitter),gl=gradeLoss(r.packetLoss);
     const capacity=worst(gd,gu),responsive=worst(gp,gdp,gup,gj,gdlJ,gulJ,gl);const ex=experienceCards(r);
     const out=document.getElementById('speedResults');if(!out)return;
     out.innerHTML=`
       <div class="card result ${capacity.level==='Very Poor'||capacity.level==='Poor'?'unknown':capacity.level==='Fair'?'prov':'ok'}">
-        ${(tech!=='Unknown'||r.carrier)?`<div class="small muted" style="margin-bottom:8px">${tech!=='Unknown'?`Connection: ${esc(tech)}`:''}${tech!=='Unknown'&&r.carrier?' • ':''}${r.carrier?`Network: ${esc(r.carrier)}`:''}</div>`:''}
-        <div class="grid" style="margin-top:4px">
+        <div style="font-size:1.35em;font-weight:900">${esc(tech)} Speed Test</div>
+        ${r.carrier?`<div class="small muted" style="margin-top:4px">Network: ${esc(r.carrier)}</div>`:''}
+        <div class="grid" style="margin-top:12px">
           <div class="countbox"><span class="small muted">Speed Capacity</span><b>${capacity.emoji} ${esc(capacity.level)}</b></div>
           <div class="countbox"><span class="small muted">Responsiveness</span><b>${responsive.emoji} ${esc(responsive.level)}</b></div>
         </div>
@@ -7322,7 +7204,27 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
         <div style="margin:6px 0">🌐 <b>Browsing / social media:</b> ${esc(ex.browse)}</div>
         <div style="margin:6px 0">📡 <b>Hotspot use:</b> ${esc(ex.hotspot)}</div>
       </div>`;
+    if(save)saveSpeedLocal({...r,capacity:capacity.level,responsiveness:responsive.level,savedAt:new Date().toISOString()});
   }
+
+  function loadHistory(){try{return JSON.parse(localStorage.getItem(SPEED_HISTORY_KEY)||'[]')||[];}catch(e){return [];}}
+  function saveSpeedLocal(r){
+    const a=loadHistory();
+    const signature=[r.download,r.upload,r.idlePing,r.downloadPing,r.uploadPing,r.packetLoss,r.connection].join('|');
+    if(a[0]&&a[0]._sig===signature&&Date.now()-new Date(a[0].savedAt).getTime()<60000)return;
+    a.unshift({...r,_sig:signature});
+    localStorage.setItem(SPEED_HISTORY_KEY,JSON.stringify(a.slice(0,100)));
+    renderHistory();
+  }
+  function renderHistory(){
+    const host=document.getElementById('speedHistory');if(!host)return;const a=loadHistory();
+    if(!a.length){host.innerHTML='<div class="small muted">No speed tests saved on this device yet.</div>';return;}
+    host.innerHTML=a.slice(0,25).map((r,i)=>`<div class="record">
+      <div style="font-weight:800">${esc(r.connection||'Unknown')} • ${r.download===null?'?':esc(fmt(r.download,2))}↓ / ${r.upload===null?'?':esc(fmt(r.upload,2))}↑ Mbps</div>
+      <div class="small muted">${esc(new Date(r.savedAt).toLocaleString())}${r.idlePing!==null&&r.idlePing!==undefined?' • '+esc(fmt(r.idlePing,1))+' ms ping':''}${r.packetLoss!==null&&r.packetLoss!==undefined?' • '+esc(fmt(r.packetLoss,2))+'% loss':''}</div>
+    </div>`).join('');
+  }
+  function clearHistory(){if(confirm('Clear all speed tests saved on this device?')){localStorage.removeItem(SPEED_HISTORY_KEY);renderHistory();}}
 
   function setSpeedFile(file){
     if(!file)return;window._speedPastedFile=file;
@@ -7359,26 +7261,17 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
       if(st)st.textContent='Reading Speedtest screenshot…';
       let enhanced=file;try{if(typeof makeEnhancedImage==='function')enhanced=await makeEnhancedImage(file);}catch(e){}
       const r1=await Tesseract.recognize(enhanced,'eng',{...OCR_REMOTE_SPEED,logger:m=>{if(m.status==='recognizing text'&&st)st.textContent=`Enhanced speed scan ${Math.round((m.progress||0)*100)}%…`; }},{blocks:true,tsv:true});
-      const d1=r1?.data||{}, t1=parseSpeedText(d1.text||''), s1=parseSpeedSpatial(d1);
-      let parsed=applySpeedSpatial(t1,s1);
+      const d1=r1?.data||{};let parsed=applySpeedSpatial(parseSpeedText(d1.text||''),parseSpeedSpatial(d1));
       const r2=await Tesseract.recognize(file,'eng',{...OCR_REMOTE_SPEED,logger:m=>{if(m.status==='recognizing text'&&st)st.textContent=`Original speed scan ${Math.round((m.progress||0)*100)}%…`; }},{blocks:true,tsv:true});
-      const d2=r2?.data||{}, t2=parseSpeedText(d2.text||''), s2=parseSpeedSpatial(d2);
-      parsed=mergeSpeed(parsed,t2);parsed=applySpeedSpatial(parsed,s2);
-      // Reconcile Download/Upload independently from every OCR read. This is
-      // intentionally speed-test-only and cannot affect Cell IDs, PLMNs, eNBs,
-      // Franklin/M2000 parsing, or any registry/cloud-sync code.
-      let card={};
-      try{card=await targetedSpeedCardOcr(file,d2,st);}catch(e){card={};}
-      parsed.download=reconcileSpeedMetric([card.download,s1.download,t1.download,s2.download,t2.download]);
-      parsed.upload=reconcileSpeedMetric([card.upload,s1.upload,t1.upload,s2.upload,t2.upload]);
+      const d2=r2?.data||{};parsed=mergeSpeed(parsed,parseSpeedText(d2.text||''));parsed=applySpeedSpatial(parsed,parseSpeedSpatial(d2));
       const override=document.getElementById('speedConnectionOverride')?.value||'';if(override)parsed.connection=override;
       // Sanity filters prevent dates/test IDs from becoming performance metrics.
       ['download','upload'].forEach(k=>{if(parsed[k]!==null&&(parsed[k]<0||parsed[k]>100000))parsed[k]=null;});
       ['idlePing','downloadPing','uploadPing','idleJitter','downloadJitter','uploadJitter'].forEach(k=>{if(parsed[k]!==null&&(parsed[k]<0||parsed[k]>10000))parsed[k]=null;});
       if(parsed.packetLoss!==null&&(parsed.packetLoss<0||parsed.packetLoss>100))parsed.packetLoss=null;
-      renderSpeed(parsed);
+      renderSpeed(parsed,true);
       const misses=[];if(parsed.download===null)misses.push('download');if(parsed.upload===null)misses.push('upload');if(parsed.idlePing===null)misses.push('ping');
-      if(st)st.textContent=misses.length?`Analysis complete. OCR missed: ${misses.join(', ')}.`:'Analysis complete.';
+      if(st)st.textContent=misses.length?`Analysis complete. OCR missed: ${misses.join(', ')}.`:'Analysis complete. Saved locally on this device.';
     }catch(e){if(st)st.textContent=`Speedtest OCR failed: ${String(e?.message||e||'unknown error').replace(/\s+/g,' ').slice(0,120)}`;}
     finally{btn.disabled=false;}
   }
@@ -7393,10 +7286,13 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
     document.getElementById('speedPasteTarget')?.addEventListener('paste',pastedFromEvent);
     document.getElementById('speedRunBtn')?.addEventListener('click',analyzeImage);
     document.getElementById('speedClearBtn')?.addEventListener('click',clearSpeed);
+    document.getElementById('speedRefreshHistoryBtn')?.addEventListener('click',renderHistory);
+    document.getElementById('speedClearHistoryBtn')?.addEventListener('click',clearHistory);
+    renderHistory();
   });
 
   // Exposed for regression tests only. It does not sync or mutate the tower registry.
-  window.__speedAnalyzerTest={speedResultText,parseSpeedText,parseSpeedSpatial,reconcileSpeedMetric,speedCardCropBoxes,speedCardNumberFromText,gradeDownload,gradeUpload,gradePing,gradeJitter,gradeLoss,experienceCards,cleanTech};
+  window.__speedAnalyzerTest={speedResultText,parseSpeedText,parseSpeedSpatial,gradeDownload,gradeUpload,gradePing,gradeJitter,gradeLoss,experienceCards,cleanTech};
 })();
 </script>
 
