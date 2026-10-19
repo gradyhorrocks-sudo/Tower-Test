@@ -1,4 +1,4 @@
-const CACHE='mctr-grouped-site-pins-v83';
+const CACHE='mctr-brand-carrier-colors-v86';
 
 const CORE=[
  './',

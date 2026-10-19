@@ -884,8 +884,20 @@ function ensureTowerMap(){
  renderTowerMap();
 }
 
-// One marker per physical site; each record retains its own unique identity and coordinates.
+// One marker per carrier per physical site; each record retains its own identity.
+function samePhysicalLocation(a,b){
+ const lat1=Number(a.latitude),lon1=Number(a.longitude),lat2=Number(b.latitude),lon2=Number(b.longitude);
+ return Math.hypot((lat1-lat2)*111320,(lon1-lon2)*111320*Math.cos((lat1+lat2)*Math.PI/360))<=25;
+}
+function offsetCarrierPin(lat,lon,index,total){
+ const pt=towerMap.project([lat,lon]);
+ const angle=2*Math.PI*index/total-Math.PI/2;
+ const radius=20;
+ const ll=towerMap.unproject([pt.x+Math.cos(angle)*radius,pt.y+Math.sin(angle)*radius]);
+ return [ll.lat,ll.lng];
+}
 function samePhysicalSite(a,b){
+ if(String(a.effective.plmn||a.record.plmn||'').trim() !== String(b.effective.plmn||b.record.plmn||'').trim())return false;
  const lat1=Number(a.latitude),lon1=Number(a.longitude),lat2=Number(b.latitude),lon2=Number(b.longitude);
  const dy=(lat1-lat2)*111320;
  const dx=(lon1-lon2)*111320*Math.cos((lat1+lat2)*Math.PI/360);
@@ -910,10 +922,11 @@ function renderTowerMap(){
  for(const site of sites){
    const selected=site.find(e=>activeMapEditRecord&&keyOf(activeMapEditRecord)===keyOf(e.record));
    const anchor=selected||site[0];
-   const distinctCarriers=[...new Set(site.map(e=>String(e.effective.carrier||e.record.carrier||'')))];
-   const mixed=distinctCarriers.length>1;
-   const icon=mixed?L.divIcon({className:'',html:'<div class="carrier-map-pin" style="background:#64748b"><span style="position:absolute;top:-7px;right:-9px;background:#fff;color:#172033;border-radius:12px;padding:1px 4px;font:bold 11px sans-serif;border:1px solid #64748b">'+site.length+'</span></div>',iconSize:[32,34],iconAnchor:[13,30],popupAnchor:[0,-28]}):carrierMapIcon(anchor.record);
-   const marker=L.marker([anchor.latitude,anchor.longitude],{draggable:!!selected,icon}).addTo(towerMap);
+   const icon=carrierMapIcon(anchor.record);
+   // Offset collocated carriers on screen so their separate pins remain clickable.
+   const colocated=sites.filter(other=>samePhysicalLocation(other[0],site[0]));
+   const position=colocated.length>1 && !selected ? offsetCarrierPin(anchor.latitude,anchor.longitude,colocated.indexOf(site),colocated.length) : [anchor.latitude,anchor.longitude];
+   const marker=L.marker(position,{draggable:!!selected,icon}).addTo(towerMap);
    const heading=site.length===1?esc(anchor.effective.site||anchor.record.site||'Unnamed tower'):esc(anchor.effective.site||anchor.record.site||'Tower site')+' ('+site.length+' records)';
    const entries=site.map((entry,i)=>{
      const r=entry.record,er=entry.effective;
@@ -940,7 +953,7 @@ function renderTowerMap(){
    towerMarkers.push(marker);
  }
  const status=document.getElementById('mapStatus');
- if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Towers within 25 m share a pin; tap to see every eNB/gNB.`;
+ if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Only records from the same PLMN within 25 m share a pin; different carriers stay separate.`;
 }
 
 
@@ -1387,15 +1400,32 @@ function signalRating(kind,v){
 }
 
 function carrierMapColor(name,plmn){
- const n=String(name||'').toLowerCase();
+ // Recognized carriers use their established brand palette rather than a
+ // generated color. Unknown carriers remain neutral until explicitly mapped.
+ const n=String(name||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
  const p=String(plmn||'').replace(/\D/g,'');
- if(p==='310830'||n.includes('starlink'))return '#111111';
- if(p==='310260'||n.includes('t-mobile')||n.includes('tmobile'))return '#E20074';
- if(p==='310410'||n.includes('at&t')||n.includes('att'))return '#009FDB';
- if(p==='311480'||n.includes('verizon'))return '#CD040B';
- if(p==='312290'||n.includes('strata'))return '#F58220';
- if(p==='310020'||p==='31220'||n.includes('union wireless'))return '#006341';
- return '#6B7280';
+ const has=(term)=>(' '+n+' ').includes(' '+term+' ');
+ if(p==='310830'||has('starlink')||has('t mobile starlink'))return '#111111';
+ if(p==='310260'||has('t mobile')||has('tmobile'))return '#E20074';
+ if(p==='310410'||has('at t')||has('att'))return '#009FDB';
+ if(p==='311480'||has('verizon'))return '#CD040B';
+ if(p==='312290'||has('strata')||has('strata networks'))return '#F58220';
+ if(p==='310020'||p==='31220'||has('union wireless'))return '#006341';
+ // Other recognized operators. PLMNs listed only when carrier identification
+ // is sufficiently specific; names handle additional markets and MVNOs.
+ if(has('uscellular')||has('us cellular'))return '#0066B3';
+ if(has('boost mobile')||has('boost'))return '#F15A24';
+ if(has('dish wireless')||has('dish'))return '#F15A24';
+ if(has('cricket wireless')||has('cricket'))return '#5CBF3A';
+ if(has('metro by t mobile')||has('metropcs')||has('metro'))return '#6B2C91';
+ if(has('rogers')||has('rogers wireless'))return '#DA291C';
+ if(has('bell mobility')||has('bell canada'))return '#00549A';
+ if(has('telus'))return '#4B286D';
+ if(has('vodafone'))return '#E60000';
+ if(has('orange'))return '#FF7900';
+ if(has('ee'))return '#00B2A9';
+ if(has('o2'))return '#0050FF';
+ return '#6B7280'; // Unknown carrier: neutral until its brand is identified.
 }
 
 function carrierMapIcon(record){
