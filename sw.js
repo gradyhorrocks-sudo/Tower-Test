@@ -1,4 +1,4 @@
-const CACHE='mctr-brand-carrier-colors-v87';
+const CACHE='mctr-location-preserve-v89';
 
 const CORE=[
  './',

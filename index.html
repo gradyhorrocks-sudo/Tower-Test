@@ -884,7 +884,7 @@ function ensureTowerMap(){
  renderTowerMap();
 }
 
-// A physical site is identified by its normalized user-assigned name.
+// Names are labels, not coordinates. Never use names to relocate records.
 // Carrier identity is intentionally NOT part of this key: different carriers
 // share the same location but keep distinct markers and popups.
 function physicalSiteName(r){
@@ -931,12 +931,9 @@ function sameMapCarrier(a,b){
  return x.name===y.name;
 }
 function samePhysicalSite(a,b){
- if(!sameMapCarrier(a,b))return false;
- const an=physicalSiteName(a.effective)||physicalSiteName(a.record);
- const bn=physicalSiteName(b.effective)||physicalSiteName(b.record);
- // Names identify a physical site; carrier still separates its map pins.
- if(an&&bn&&an===bn)return true;
- return samePhysicalLocation(a,b);
+ // Only colocated records from the same carrier may share a marker.
+ // A matching name alone is NOT evidence that coordinates can be moved.
+ return sameMapCarrier(a,b) && samePhysicalLocation(a,b);
 }
 function renderTowerMap(){
  if(!towerMap||!DB)return;
@@ -949,9 +946,9 @@ function renderTowerMap(){
    const er=getEffectiveRecord(r);
    if(!validCoord(er.latitude,-90,90)||!validCoord(er.longitude,-180,180))continue;
    located++;
-   const name=physicalSiteName(er)||physicalSiteName(r);
-   const sitePosition=name?siteLocationForName(name):null;
-   const entry={record:r,effective:er,latitude:sitePosition?.lat??Number(er.latitude),longitude:sitePosition?.lon??Number(er.longitude)};
+   // Always use each record's actual saved coordinates. Never borrow another
+   // record's position merely because its tower name matches.
+   const entry={record:r,effective:er,latitude:Number(er.latitude),longitude:Number(er.longitude)};
    let site=sites.find(group=>samePhysicalSite(group[0],entry));
    if(!site){site=[];sites.push(site);}
    site.push(entry);
@@ -961,8 +958,7 @@ function renderTowerMap(){
    const anchor=selected||site[0];
    const icon=carrierMapIcon(anchor.record);
    // Offset collocated carriers on screen so their separate pins remain clickable.
-   const colocated=sites.filter(other=>samePhysicalLocation(other[0],site[0]) || (
-     physicalSiteName(other[0].effective) && physicalSiteName(other[0].effective)===physicalSiteName(site[0].effective)));
+   const colocated=sites.filter(other=>samePhysicalLocation(other[0],site[0]));
    const position=colocated.length>1 && !selected ? offsetCarrierPin(anchor.latitude,anchor.longitude,colocated.indexOf(site),colocated.length) : [anchor.latitude,anchor.longitude];
    const marker=L.marker(position,{draggable:!!selected,icon}).addTo(towerMap);
    const heading=site.length===1?esc(anchor.effective.site||anchor.record.site||'Unnamed tower'):esc(anchor.effective.site||anchor.record.site||'Tower site')+' ('+site.length+' records)';
@@ -991,7 +987,7 @@ function renderTowerMap(){
    towerMarkers.push(marker);
  }
  const status=document.getElementById('mapStatus');
- if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Same named site and carrier share a pin; different carriers always have separate pins.`;
+ if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Only colocated records from the same carrier share a pin; different carriers always have separate pins.`;
 }
 
 
@@ -1042,18 +1038,13 @@ function savePendingTowerLocation(){
  const identity=keyOf(p.record);
  const idx=(DB.records||[]).findIndex(r=>keyOf(r)===identity);
  if(idx<0){alert('The selected tower is no longer in the registry. No changes saved.');return;}
+ // Persist only the explicitly selected tower. Never silently rewrite
+ // coordinates of other records or carriers, even with matching site names.
+ const affected=[[idx,cloneRecord(DB.records[idx])]];
  const siteName=physicalSiteName(DB.records[idx]);
- // The user explicitly defines records with the same site name as one
- // physical location, across LTE/5G and across carriers.
- const affected=[];
- DB.records.forEach((r,i)=>{
-   if(i===idx || (siteName && physicalSiteName(r)===siteName)){
-     affected.push([i,cloneRecord(r)]);
-     DB.records[i]={...r,latitude:lat.toFixed(6),longitude:lon.toFixed(6)};
-   }
- });
+ DB.records[idx]={...DB.records[idx],latitude:lat.toFixed(6),longitude:lon.toFixed(6)};
  try{
-   saveLocal('Saved shared site location for '+siteName+' ('+affected.length+' records)');
+   saveLocal('Saved location for '+(DB.records[idx].site||'selected tower'));
  }catch(e){
    affected.forEach(([i,before])=>{DB.records[i]=before;});
    alert('Could not save location on this device: '+String(e?.message||e));
@@ -1075,7 +1066,7 @@ function savePendingTowerLocation(){
  activeMapEditRecord=DB.records[idx];
  if(towerMap){renderTowerMap();towerMap.setView([lat,lon],16);}
  const status=document.getElementById('mapEditStatus')||document.getElementById('mapUpdateStatus');
- if(status)status.textContent='Shared site location saved for ' + affected.length + ' records. Cloud upload pending until Synced ✓ appears.';
+ if(status)status.textContent='Selected tower location saved. Cloud upload pending until Synced ✓ appears.';
  toast('Tower location saved locally. Syncing to cloud…');
  scheduleCloudSync(200);
 }
