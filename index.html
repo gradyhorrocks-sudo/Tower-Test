@@ -921,10 +921,21 @@ function sameMapCarrier(a,b){
  if(!x.name || !y.name)return !!(x.plmn && y.plmn && x.plmn===y.plmn);
  return x.name===y.name;
 }
+// Group only same-carrier records at the same named physical site when
+// their real saved coordinates are within 25 meters. This is a geographic
+// tolerance, NOT a minimum pin separation or a coordinate adjustment.
+function mapDistanceMeters(a,b){
+ const toRad=Math.PI/180;
+ const dLat=(b.latitude-a.latitude)*toRad;
+ const dLon=(b.longitude-a.longitude)*toRad;
+ const lat1=a.latitude*toRad,lat2=b.latitude*toRad;
+ const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+ return 12742000*Math.asin(Math.min(1,Math.sqrt(h)));
+}
 function samePhysicalSite(a,b){
  const nameA=physicalSiteName(a.effective||a.record);
  const nameB=physicalSiteName(b.effective||b.record);
- return !!nameA && nameA===nameB && sameMapCarrier(a,b);
+ return !!nameA && nameA===nameB && sameMapCarrier(a,b) && mapDistanceMeters(a,b)<=25;
 }
 function renderTowerMap(){
  if(!towerMap||!DB)return;
@@ -940,7 +951,7 @@ function renderTowerMap(){
    // Always use each record's actual saved coordinates. Never borrow another
    // record's position merely because its tower name matches.
    const entry={record:r,effective:er,latitude:Number(er.latitude),longitude:Number(er.longitude)};
-   let site=sites.find(group=>samePhysicalSite(group[0],entry));
+   let site=sites.find(group=>group.every(member=>samePhysicalSite(member,entry)));
    if(!site){site=[];sites.push(site);}
    site.push(entry);
  }
@@ -977,7 +988,7 @@ function renderTowerMap(){
    towerMarkers.push(marker);
  }
  const status=document.getElementById('mapStatus');
- if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Hold and drag a pin to move the records for that named site and carrier. Pins have no automatic spacing.`;
+ if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Hold and drag a pin to move the records for that named site and carrier. Pins have no automatic spacing; same-carrier records within 25 m at the same named site share one pin.`;
 }
 
 // Save a dragged marker as one atomic edit for the records represented by
