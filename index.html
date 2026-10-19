@@ -897,11 +897,23 @@ function renderTowerMap(){
 
    const editing=activeMapEditRecord && keyOf(activeMapEditRecord)===keyOf(r);
    const marker=L.marker([lat,lon],{draggable:!!editing,icon:carrierMapIcon(r)}).addTo(towerMap);
+   const towerName=esc(er.site||r.site||'Unnamed tower');
+   const towerCarrier=esc(er.carrier||r.carrier||'Unknown carrier');
+   const towerRadio=esc(er.radio||r.radio||'Unknown');
+   const towerId=er.eNB||r.eNB||er.gNB||r.gNB||'';
+   const towerIdLabel=(er.eNB||r.eNB)?'LTE eNB':'5G gNB';
+   const towerBands=esc(er.bands||r.bands||'Not recorded');
    marker.bindPopup(
-     `<b>${esc(r.site)}</b><br>${carrierBrandHtml(r.carrier,recordPlmn(r),true)} · ${esc(r.radio)}<br>`+
-     `${r.eNB?'eNB '+esc(r.eNB):'gNB '+esc(r.gNB)}<br>${esc(er.bands||r.bands||'bands unknown')}`+
-     `${editing?'<br><b>Drag this pin to move tower</b>':''}`
+     `<div style="min-width:190px;line-height:1.6;color:#172033">`+
+     `<div style="font-weight:800;font-size:16px;margin-bottom:5px">${towerName}</div>`+
+     `<div><b>Carrier:</b> ${towerCarrier}</div>`+
+     `<div><b>Network:</b> ${towerRadio}</div>`+
+     `<div><b>${towerIdLabel}:</b> ${esc(towerId||'Not recorded')}</div>`+
+     `<div><b>Bands:</b> ${towerBands}</div>`+
+     `${editing?'<div><b>Drag this pin to move tower</b></div>':''}</div>`,
+     {maxWidth:310,autoPan:true,closeButton:true}
    );
+   marker.on('click',()=>marker.openPopup());
 
    if(editing){
      activeMapEditMarker=marker;
