@@ -896,12 +896,26 @@ function offsetCarrierPin(lat,lon,index,total){
  const ll=towerMap.unproject([pt.x+Math.cos(angle)*radius,pt.y+Math.sin(angle)*radius]);
  return [ll.lat,ll.lng];
 }
+// Keep carrier groups separate even when records have no explicit PLMN.
+// A missing PLMN must NEVER cause two different carrier names to merge.
+function mapCarrierIdentity(entry){
+ const r=entry.effective||entry.record||{};
+ const name=String(r.carrier||entry.record?.carrier||'').trim().toLowerCase().replace(/\s+/g,' ');
+ const plmn=String(registryPlmnForRecord(r)||registryPlmnForRecord(entry.record)||'').trim();
+ return {name,plmn};
+}
+function sameMapCarrier(a,b){
+ const x=mapCarrierIdentity(a), y=mapCarrierIdentity(b);
+ // Explicitly different names cannot share a popup, even with missing/misassigned PLMNs.
+ if(x.name && y.name && x.name!==y.name)return false;
+ if(x.plmn && y.plmn && x.plmn!==y.plmn)return false;
+ // If a name is missing, require two matching PLMNs; don't group anonymous records.
+ if(!x.name || !y.name)return !!(x.plmn && y.plmn && x.plmn===y.plmn);
+ return x.name===y.name;
+}
 function samePhysicalSite(a,b){
- if(String(a.effective.plmn||a.record.plmn||'').trim() !== String(b.effective.plmn||b.record.plmn||'').trim())return false;
- const lat1=Number(a.latitude),lon1=Number(a.longitude),lat2=Number(b.latitude),lon2=Number(b.longitude);
- const dy=(lat1-lat2)*111320;
- const dx=(lon1-lon2)*111320*Math.cos((lat1+lat2)*Math.PI/360);
- return Math.hypot(dx,dy)<=25; // 25 metres: accommodates GPS placement differences at the same site
+ if(!sameMapCarrier(a,b))return false;
+ return samePhysicalLocation(a,b);
 }
 function renderTowerMap(){
  if(!towerMap||!DB)return;
@@ -953,7 +967,7 @@ function renderTowerMap(){
    towerMarkers.push(marker);
  }
  const status=document.getElementById('mapStatus');
- if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Only records from the same PLMN within 25 m share a pin; different carriers stay separate.`;
+ if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Only records from the same carrier within 25 m share a pin; different carriers stay separate.`;
 }
 
 
