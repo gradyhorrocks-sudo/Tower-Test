@@ -2341,7 +2341,7 @@ function stampRegistryForSync(){
    // Critical offline fix: every new/changed record gets a fresh modification
    // timestamp, even if it had already synced in the past.
    if(changed){
-     r._syncModifiedAt=now;
+     r._syncModifiedAt=Math.max(now,Number(r._syncModifiedAt||0)+1,Number(old?._syncModifiedAt||0)+1);
    }else if(old && Number(old._syncModifiedAt||0)){
      r._syncModifiedAt=Number(old._syncModifiedAt);
    }
@@ -2401,6 +2401,7 @@ async function cloudSyncNow(force=false){
 
    // text/plain keeps this a "simple" cross-origin request, avoiding a CORS
    // preflight between GitHub Pages and the Netlify sync backend.
+   const submittedRecords=cloneJson(DB.records||[]);
    const resp=await fetch(base+'/.netlify/functions/registry-sync',{
      method:'POST',
      headers:{'content-type':'text/plain;charset=UTF-8'},
@@ -2428,9 +2429,43 @@ async function cloudSyncNow(force=false){
        saveOfflineRegistryCopy(DB,Number(data.revision||0));
      showOfflineRegistryStatus();
    }
+   // Verify the server actually retained every locally edited record before
+   // clearing the pending queue or claiming synchronization succeeded.
+   const verification=await fetch(base+'/.netlify/functions/registry-sync',{
+     method:'GET',headers:{'x-tower-pin':cloudSyncPin()},cache:'no-store'
+   });
+   let confirmed={};
+   try{confirmed=JSON.parse(await verification.text())}catch(e){}
+   if(!verification.ok||!confirmed.ok||!Array.isArray(confirmed.registry?.records)){
+     throw new Error('Cloud read-back failed; local edits kept pending.');
+   }
+   const remoteMap=new Map(confirmed.registry.records.map(r=>[recordSyncKey(r),r]));
+   const unconfirmed=submittedRecords.filter(r=>{
+     const rr=remoteMap.get(recordSyncKey(r));
+     if(!rr)return true;
+     const localTime=Number(r._syncModifiedAt||0);
+     const remoteTime=Number(rr._syncModifiedAt||0);
+     if(localTime>remoteTime)return true;
+     if(localTime===remoteTime){
+       const a={...r},b={...rr};
+       return JSON.stringify(a)!==JSON.stringify(b);
+     }
+     return false;
+   });
+   if(unconfirmed.length){
+     const keep=new Map(submittedRecords.map(r=>[recordSyncKey(r),r]));
+     DB.records=(DB.records||[]).map(r=>keep.get(recordSyncKey(r))||r);
+     localStorage.setItem('masterTowerRegistry',JSON.stringify(DB));
+     // Keep the local copy and pending state intact. Do not overwrite with
+     // an older server copy and do not display a false green checkmark.
+     throw new Error(unconfirmed.length+' tower update(s) not confirmed in cloud; retry sync.');
+   }
+   DB=mergeCloudRegistry(DB,confirmed.registry);
+   localStorage.setItem('masterTowerRegistry',JSON.stringify(DB));
+   saveOfflineRegistryCopy(DB,Number(confirmed.revision||0));
    setCloudState({
      pending:false,
-     remoteRevision:Number(data.revision||0),
+     remoteRevision:Number(confirmed.revision||0),
      lastSync:Date.now(),
      baseline:cloneJson(DB)
    });
