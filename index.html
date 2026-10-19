@@ -884,50 +884,63 @@ function ensureTowerMap(){
  renderTowerMap();
 }
 
+// One marker per physical site; each record retains its own unique identity and coordinates.
+function samePhysicalSite(a,b){
+ const lat1=Number(a.latitude),lon1=Number(a.longitude),lat2=Number(b.latitude),lon2=Number(b.longitude);
+ const dy=(lat1-lat2)*111320;
+ const dx=(lon1-lon2)*111320*Math.cos((lat1+lat2)*Math.PI/360);
+ return Math.hypot(dx,dy)<=25; // 25 metres: accommodates GPS placement differences at the same site
+}
 function renderTowerMap(){
  if(!towerMap||!DB)return;
  towerMarkers.forEach(m=>m.remove());
  towerMarkers=[];
  activeMapEditMarker=null;
-
+ const sites=[];
+ let located=0;
  for(const r of DB.records){
    const er=getEffectiveRecord(r);
    if(!validCoord(er.latitude,-90,90)||!validCoord(er.longitude,-180,180))continue;
-   const lat=Number(er.latitude),lon=Number(er.longitude);
-
-   const editing=activeMapEditRecord && keyOf(activeMapEditRecord)===keyOf(r);
-   const marker=L.marker([lat,lon],{draggable:!!editing,icon:carrierMapIcon(r)}).addTo(towerMap);
-   const towerName=esc(er.site||r.site||'Unnamed tower');
-   const towerCarrier=esc(er.carrier||r.carrier||'Unknown carrier');
-   const towerRadio=esc(er.radio||r.radio||'Unknown');
-   const towerId=er.eNB||r.eNB||er.gNB||r.gNB||'';
-   const towerIdLabel=(er.eNB||r.eNB)?'LTE eNB':'5G gNB';
-   const towerBands=esc(er.bands||r.bands||'Not recorded');
-   marker.bindPopup(
-     `<div style="min-width:190px;line-height:1.6;color:#172033">`+
-     `<div style="font-weight:800;font-size:16px;margin-bottom:5px">${towerName}</div>`+
-     `<div><b>Carrier:</b> ${towerCarrier}</div>`+
-     `<div><b>Network:</b> ${towerRadio}</div>`+
-     `<div><b>${towerIdLabel}:</b> ${esc(towerId||'Not recorded')}</div>`+
-     `<div><b>Bands:</b> ${towerBands}</div>`+
-     `${editing?'<div><b>Drag this pin to move tower</b></div>':''}</div>`,
-     {maxWidth:310,autoPan:true,closeButton:true}
-   );
+   located++;
+   const entry={record:r,effective:er,latitude:Number(er.latitude),longitude:Number(er.longitude)};
+   let site=sites.find(group=>samePhysicalSite(group[0],entry));
+   if(!site){site=[];sites.push(site);}
+   site.push(entry);
+ }
+ for(const site of sites){
+   const selected=site.find(e=>activeMapEditRecord&&keyOf(activeMapEditRecord)===keyOf(e.record));
+   const anchor=selected||site[0];
+   const distinctCarriers=[...new Set(site.map(e=>String(e.effective.carrier||e.record.carrier||'')))];
+   const mixed=distinctCarriers.length>1;
+   const icon=mixed?L.divIcon({className:'',html:'<div class="carrier-map-pin" style="background:#64748b"><span style="position:absolute;top:-7px;right:-9px;background:#fff;color:#172033;border-radius:12px;padding:1px 4px;font:bold 11px sans-serif;border:1px solid #64748b">'+site.length+'</span></div>',iconSize:[32,34],iconAnchor:[13,30],popupAnchor:[0,-28]}):carrierMapIcon(anchor.record);
+   const marker=L.marker([anchor.latitude,anchor.longitude],{draggable:!!selected,icon}).addTo(towerMap);
+   const heading=site.length===1?esc(anchor.effective.site||anchor.record.site||'Unnamed tower'):esc(anchor.effective.site||anchor.record.site||'Tower site')+' ('+site.length+' records)';
+   const entries=site.map((entry,i)=>{
+     const r=entry.record,er=entry.effective;
+     const towerId=er.eNB||r.eNB||er.gNB||r.gNB||'Not recorded';
+     const idLabel=(er.eNB||r.eNB)?'LTE eNB':'5G gNB';
+     return '<div style="padding:6px 0;'+(i?'border-top:1px solid #d6dbe2;':'')+'">'+
+       '<b>'+esc(er.site||r.site||'Unnamed tower')+'</b><div><b>Carrier:</b> '+esc(er.carrier||r.carrier||'Unknown')+'</div>'+
+       '<div><b>Network:</b> '+esc(er.radio||r.radio||'Unknown')+'</div>'+
+       '<div><b>'+idLabel+':</b> '+esc(towerId)+'</div>'+
+       '<div><b>Bands:</b> '+esc(er.bands||r.bands||'Not recorded')+'</div></div>';
+   }).join('');
+   marker.bindPopup('<div style="min-width:215px;max-height:300px;overflow-y:auto;line-height:1.5;color:#172033">'+
+     '<div style="font-weight:800;font-size:16px;margin-bottom:5px">'+heading+'</div>'+entries+
+     (selected?'<div><b>Drag to move selected tower only</b></div>':'')+'</div>',{maxWidth:350,autoPan:true,closeButton:true});
    marker.on('click',()=>marker.openPopup());
-
-   if(editing){
+   if(selected){
      activeMapEditMarker=marker;
      marker.on('dragend',ev=>{
        const ll=ev.target.getLatLng();
-       saveMapEditedLocation(r,ll.lat,ll.lng,false);
+       saveMapEditedLocation(selected.record,ll.lat,ll.lng,false);
      });
      marker.openPopup();
    }
    towerMarkers.push(marker);
  }
-
  const status=document.getElementById('mapStatus');
- if(status)status.textContent=`${towerMarkers.length} saved tower location${towerMarkers.length===1?'':'s'} shown. ${DB.records.length-towerMarkers.length} records lack valid coordinates.`;
+ if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Towers within 25 m share a pin; tap to see every eNB/gNB.`;
 }
 
 

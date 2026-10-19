@@ -1,4 +1,4 @@
-const CACHE='mctr-home-screen-cloud-bootstrap-v82';
+const CACHE='mctr-grouped-site-pins-v83';
 
 const CORE=[
  './',
