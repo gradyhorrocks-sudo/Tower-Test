@@ -902,17 +902,8 @@ function siteLocationForName(name){
  return null;
 }
 // One marker per carrier per physical site; each record retains its own identity.
-function samePhysicalLocation(a,b){
- const lat1=Number(a.latitude),lon1=Number(a.longitude),lat2=Number(b.latitude),lon2=Number(b.longitude);
- return Math.hypot((lat1-lat2)*111320,(lon1-lon2)*111320*Math.cos((lat1+lat2)*Math.PI/360))<=25;
-}
-function offsetCarrierPin(lat,lon,index,total){
- const pt=towerMap.project([lat,lon]);
- const angle=2*Math.PI*index/total-Math.PI/2;
- const radius=20;
- const ll=towerMap.unproject([pt.x+Math.cos(angle)*radius,pt.y+Math.sin(angle)*radius]);
- return [ll.lat,ll.lng];
-}
+// No distance threshold and no visual coordinate offset.
+// Tower grouping uses the site name and carrier identity only.
 // Keep carrier groups separate even when records have no explicit PLMN.
 // A missing PLMN must NEVER cause two different carrier names to merge.
 function mapCarrierIdentity(entry){
@@ -931,9 +922,9 @@ function sameMapCarrier(a,b){
  return x.name===y.name;
 }
 function samePhysicalSite(a,b){
- // Only colocated records from the same carrier may share a marker.
- // A matching name alone is NOT evidence that coordinates can be moved.
- return sameMapCarrier(a,b) && samePhysicalLocation(a,b);
+ const nameA=physicalSiteName(a.effective||a.record);
+ const nameB=physicalSiteName(b.effective||b.record);
+ return !!nameA && nameA===nameB && sameMapCarrier(a,b);
 }
 function renderTowerMap(){
  if(!towerMap||!DB)return;
@@ -957,9 +948,8 @@ function renderTowerMap(){
    const selected=site.find(e=>activeMapEditRecord&&keyOf(activeMapEditRecord)===keyOf(e.record));
    const anchor=selected||site[0];
    const icon=carrierMapIcon(anchor.record);
-   // Offset collocated carriers on screen so their separate pins remain clickable.
-   const colocated=sites.filter(other=>samePhysicalLocation(other[0],site[0]));
-   const position=colocated.length>1 && !selected ? offsetCarrierPin(anchor.latitude,anchor.longitude,colocated.indexOf(site),colocated.length) : [anchor.latitude,anchor.longitude];
+   // Render at the exact saved location: no forced separation or minimum spacing.
+   const position=[anchor.latitude,anchor.longitude];
    const marker=L.marker(position,{draggable:true,autoPan:true,icon}).addTo(towerMap);
    const heading=site.length===1?esc(anchor.effective.site||anchor.record.site||'Unnamed tower'):esc(anchor.effective.site||anchor.record.site||'Tower site')+' ('+site.length+' records)';
    const entries=site.map((entry,i)=>{
@@ -987,11 +977,11 @@ function renderTowerMap(){
    towerMarkers.push(marker);
  }
  const status=document.getElementById('mapStatus');
- if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Hold and drag a pin to move and save that carrier’s colocated records. Other carriers never move.`;
+ if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Hold and drag a pin to move the records for that named site and carrier. Pins have no automatic spacing.`;
 }
 
 // Save a dragged marker as one atomic edit for the records represented by
-// that marker (same carrier and same original physical location only).
+// that marker (same carrier and matching site name only).
 function persistDraggedCarrierPin(site,lat,lon,marker){
  if(!DB||!site?.length||!validCoord(lat,-90,90)||!validCoord(lon,-180,180)){
    renderTowerMap();return;
