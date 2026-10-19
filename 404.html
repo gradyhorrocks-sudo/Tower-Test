@@ -1,0 +1,83 @@
+<!doctype html><meta charset="utf-8"><script>location.replace('./');</script>
+<script>
+/* vWORK dual-radio stats patch:
+   For NSA / SA+NSA / NSA+SA screenshots, preserve and display BOTH 5G and LTE
+   radio-stat sections when OCR finds both. Identification/tower math remains
+   based on existing scanner logic; this patch is presentation/statistics only. */
+(function () {
+  const norm = t => String(t || '').replace(/\u2212/g,'-');
+
+  function rowVal(text, label) {
+    const rx = new RegExp('(?:^|\\n)\\s*' + label + '\\s*[:]?\\s*([-+]?\\d+(?:\\.\\d+)?)\\s*(dBm|dB|MHz)?', 'im');
+    const m = norm(text).match(rx);
+    return m ? (m[1] + (m[2] ? ' ' + m[2] : '')) : '';
+  }
+  function section(text, start, end) {
+    const T = norm(text);
+    const a = T.search(new RegExp('(?:^|\\n)\\s*'+start+'\\s*(?:\\n|$)','im'));
+    if (a < 0) return '';
+    const rest = T.slice(a);
+    const b = end ? rest.slice(1).search(new RegExp('(?:^|\\n)\\s*'+end+'\\s*(?:\\n|$)','im')) : -1;
+    return b >= 0 ? rest.slice(0,b+1) : rest;
+  }
+  function stats(sec, radio) {
+    if (!sec) return null;
+    const cell = rowVal(sec,'Cell\\s*Id|Cell\\s*ID|NCI');
+    const pci  = rowVal(sec,'PCI');
+    const rsrp = rowVal(sec,'RSRP');
+    const rsrq = rowVal(sec,'RSRQ');
+    const snr0 = rowVal(sec,'SINR0|SNR0');
+    const snr1 = rowVal(sec,'SINR1|SNR1');
+    const snr  = rowVal(sec,'SINR|SNR');
+    const band = rowVal(sec,'Band');
+    const bw   = rowVal(sec,'Bandwidth');
+    if (!(cell||pci||rsrp||rsrq||snr0||snr1||snr||band||bw)) return null;
+    return {radio,cell,pci,rsrp,rsrq,snr0,snr1,snr,band,bw};
+  }
+  function card(x) {
+    if (!x) return '';
+    const lines = [
+      ['Band',x.band],['Bandwidth',x.bw],['Cell ID/NCI',x.cell],['PCI',x.pci],
+      ['RSRP',x.rsrp],['RSRQ',x.rsrq],['SINR0',x.snr0],['SINR1',x.snr1],['SNR/SINR',x.snr]
+    ].filter(v=>v[1]);
+    return `<div class="dual-radio-card"><div class="dual-radio-title">${x.radio} statistics</div>`+
+      lines.map(v=>`<div class="dual-radio-row"><span>${v[0]}</span><b>${v[1]}</b></div>`).join('')+`</div>`;
+  }
+  function updateDualRadio() {
+    const ta = [...document.querySelectorAll('textarea')].find(e => /ocr/i.test((e.id||'')+' '+(e.name||'')+' '+(e.previousElementSibling?.textContent||'')));
+    const text = ta ? ta.value : '';
+    if (!text) return;
+    const cap = (text.match(/Network\s*Capabilities?\s*:?\s*([^\n]+)/i)||[])[1] || '';
+    if (!/(NSA|SA\s*\+\s*NSA|NSA\s*\+\s*SA)/i.test(cap)) return;
+
+    const five = stats(section(text,'5G','LTE'),'5G');
+    const lte  = stats(section(text,'LTE',null),'LTE');
+    if (!five || !lte) return;
+
+    let host = document.getElementById('dual-radio-stats');
+    if (!host) {
+      host = document.createElement('div');
+      host.id='dual-radio-stats';
+      const result = document.querySelector('.scan-result,.result-card,#scanResult,#scan-result') || ta.parentElement;
+      result.appendChild(host);
+    }
+    host.innerHTML = `<div class="dual-radio-heading">NSA dual-radio statistics</div>${card(five)}${card(lte)}`;
+  }
+
+  const style=document.createElement('style');
+  style.textContent=`
+   #dual-radio-stats{margin-top:14px}
+   .dual-radio-heading{font-weight:800;font-size:1.05rem;margin:8px 0}
+   .dual-radio-card{border:1px solid #34425a;border-radius:14px;padding:12px 14px;margin:10px 0;background:#0d1629}
+   .dual-radio-title{font-size:1.05rem;font-weight:800;margin-bottom:8px}
+   .dual-radio-row{display:flex;justify-content:space-between;gap:16px;padding:5px 0}
+   .dual-radio-row span{color:#aebcf2}.dual-radio-row b{font-weight:500}
+  `;
+  document.head.appendChild(style);
+
+  document.addEventListener('click', e => {
+    if (/scan\s*&?\s*identify/i.test(e.target?.textContent||'')) setTimeout(updateDualRadio,900);
+  });
+  setInterval(updateDualRadio,2500);
+})();
+</script>

@@ -1,4 +1,7 @@
-const CACHE='mctr-manual-combine-v95';
+const CACHE='mctr-offline-map-v117';
+const TILE_CACHE='mctr-viewed-map-tiles-v99';
+const TILE_LIMIT=450;
+const MAP_LIBS=new Set(['https://unpkg.com/leaflet@1.9.4/dist/leaflet.js','https://unpkg.com/leaflet@1.9.4/dist/leaflet.css']);
 
 const CORE=[
  './',
@@ -9,7 +12,9 @@ const CORE=[
  './icon-192.png',
  './icon-512.png',
  './apple-touch-icon.png',
- './registry.json'
+ './registry.json',
+ 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+ 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
 ];
 
 // Version-pinned OCR runtime. These are deliberately cached under their real
@@ -63,7 +68,7 @@ self.addEventListener('install',event=>{
 self.addEventListener('activate',event=>{
  event.waitUntil((async()=>{
    const names=await caches.keys();
-   await Promise.all(names.filter(name=>name!==CACHE).map(name=>caches.delete(name)));
+   await Promise.all(names.filter(name=>name!==CACHE && name!==TILE_CACHE).map(name=>caches.delete(name)));
    await self.clients.claim();
  })());
 });
@@ -81,6 +86,42 @@ self.addEventListener('fetch',event=>{
  const req=event.request;
  if(req.method!=='GET')return;
  const url=new URL(req.url);
+
+ // Save map tiles as the user views them online. No bulk tile downloads.
+ // The separate bounded cache limits storage consumption on iOS.
+ const isStreetTile=/^(?:[abc]\.)?tile\.openstreetmap\.org$/.test(url.hostname) && /^\/\d+\/\d+\/\d+\.png$/.test(url.pathname);
+ const isSatelliteTile=url.hostname==='server.arcgisonline.com' && url.pathname.includes('/World_Imagery/MapServer/tile/');
+ if(isStreetTile||isSatelliteTile){
+   event.respondWith((async()=>{
+     const cache=await caches.open(TILE_CACHE);
+     const old=await cache.match(req);
+     if(old)return old;
+     try{
+       const response=await fetch(req);
+       if(response.ok||response.type==='opaque'){
+         await cache.put(req,response.clone());
+         const keys=await cache.keys();
+         if(keys.length>TILE_LIMIT){
+           for(const key of keys.slice(0,keys.length-TILE_LIMIT))await cache.delete(key);
+         }
+       }
+       return response;
+     }catch(e){
+       return (await cache.match(req)) || new Response('<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#dce3e9"/><text x="128" y="128" text-anchor="middle" font-size="14" fill="#64748b">Not cached offline</text></svg>',{headers:{'Content-Type':'image/svg+xml'}});
+     }
+   })());
+   return;
+ }
+ if(MAP_LIBS.has(req.url) || (url.hostname==='unpkg.com' && url.pathname.startsWith('/leaflet@1.9.4/dist/images/'))){
+   event.respondWith((async()=>{
+     const cache=await caches.open(CACHE);
+     const hit=await cache.match(req);
+     if(hit)return hit;
+     try{const response=await fetch(req);await cacheResponse(cache,req,response);return response;}
+     catch(e){return (await cache.match(req))||Response.error();}
+   })());
+   return;
+ }
 
  // OCR is cache-first. If the phone is online and an item is missing, fetch it
  // once and store it. Offline requests then use exactly the same cached URL.
