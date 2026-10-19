@@ -472,11 +472,10 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <div id="towerMap" style="margin-top:12px"></div>
 <div id="mapStatus" class="small muted mapHint"></div>
 <div class="card" style="margin-top:12px;padding:12px">
- <b>Manual pin grouping</b>
- <p class="small muted">Select records from the same carrier to combine into one map pin. Grouping does not change their saved coordinates. To separate a group, select any member and tap Separate.</p>
- <div id="mapCombineChoices" style="max-height:190px;overflow:auto;margin:8px 0"></div>
- <div class="row"><button type="button" onclick="combineSelectedMapPins()">Combine selected</button><button type="button" class="secondary" onclick="separateSelectedMapPins()">Separate selected</button></div>
- <div id="mapCombineStatus" class="small muted"></div>
+ <b>Combine pins on the map</b>
+ <p class="small muted">Tap Combine Pins, then tap two pins on the map. Only pins belonging to the same carrier can combine. Your saved coordinates never change when combining.</p>
+ <div class="row"><button type="button" id="mapCombineModeButton" onclick="toggleMapCombineMode()">Combine Pins</button><button type="button" class="secondary" onclick="cancelMapCombineMode()">Cancel</button></div>
+ <div id="mapCombineStatus" class="small muted" role="status" aria-live="polite">Tap Combine Pins to begin.</div>
 </div>
 
 <div class="small muted" style="margin-top:8px">
@@ -933,40 +932,46 @@ function samePhysicalSite(a,b){
  const x=a.record?.mapPinGroup, y=b.record?.mapPinGroup;
  return !!(x&&y&&x===y&&sameMapCarrier(a,b));
 }
-function mapGroupRecordLabel(r){return `${r.site||'Unnamed'} | ${r.carrier||'Unknown'} | ${r.radio||''} ${r.eNB||r.gNB||''}`;}
-function renderMapCombineChoices(){
- const box=document.getElementById('mapCombineChoices');if(!box||!DB)return;
- const old=new Set([...box.querySelectorAll('input:checked')].map(x=>x.value));
- box.innerHTML=DB.records.filter(r=>validCoord(r.latitude,-90,90)&&validCoord(r.longitude,-180,180)).map(r=>{
-  const k=keyOf(r),group=r.mapPinGroup?` [group ${String(r.mapPinGroup).slice(-6)}]`:'';
-  return `<label style="display:block;padding:3px"><input type="checkbox" class="map-combine-choice" value="${esc(k)}" ${old.has(k)?'checked':''}> ${esc(mapGroupRecordLabel(r)+group)}</label>`;
- }).join('')||'<span class="small muted">Add coordinates to towers before combining their pins.</span>';
+let mapCombineMode=false;
+let mapCombineFirstKeys=null;
+function mapCombineStatus(message){
+ const el=document.getElementById('mapCombineStatus');if(el)el.textContent=message;
+ const btn=document.getElementById('mapCombineModeButton');if(btn)btn.textContent=mapCombineMode?'Select second pin…':'Combine Pins';
 }
-function selectedMapCombineRecords(){
- const keys=new Set([...document.querySelectorAll('.map-combine-choice:checked')].map(x=>x.value));
- return DB.records.filter(r=>keys.has(keyOf(r)));
+function toggleMapCombineMode(){mapCombineMode=true;mapCombineFirstKeys=null;mapCombineStatus('Tap the first pin on the map.');}
+function cancelMapCombineMode(){mapCombineMode=false;mapCombineFirstKeys=null;mapCombineStatus('Tap Combine Pins to begin.');}
+function mapRecordsForKeys(keys){const set=new Set(keys);return DB.records.filter(r=>set.has(keyOf(r)));}
+function mapPinTapped(site){
+ if(!mapCombineMode)return false;
+ const keys=site.map(e=>keyOf(e.record));
+ if(!mapCombineFirstKeys){mapCombineFirstKeys=keys;mapCombineStatus('First pin selected. Tap a second pin from the same carrier.');return true;}
+ if(keys.some(k=>mapCombineFirstKeys.includes(k))){mapCombineStatus('That is the same pin. Tap another pin.');return true;}
+ const first=mapRecordsForKeys(mapCombineFirstKeys),second=mapRecordsForKeys(keys);
+ if(!first.length||!second.length){cancelMapCombineMode();return true;}
+ const selected=[...new Map([...first,...second].map(r=>[keyOf(r),r])).values()];
+ const groupIds=new Set(selected.map(r=>r.mapPinGroup).filter(Boolean));
+ const members=DB.records.filter(r=>selected.includes(r)||(r.mapPinGroup&&groupIds.has(r.mapPinGroup)));
+ const entries=members.map(record=>({record,effective:record}));
+ if(!entries.every(e=>sameMapCarrier(entries[0],e))){mapCombineStatus('Cannot combine different carriers. Tap another pin from the same carrier.');return true;}
+ const groupId=selected.find(r=>r.mapPinGroup)?.mapPinGroup||'manual-'+Date.now().toString(36);
+ const previous=members.map(r=>({r,old:r.mapPinGroup}));
+ try{members.forEach(r=>r.mapPinGroup=groupId);saveLocal('Combine pins from map');}
+ catch(err){previous.forEach(({r,old})=>{if(old)r.mapPinGroup=old;else delete r.mapPinGroup;});mapCombineStatus('Could not save: '+String(err?.message||err));return true;}
+ mapCombineMode=false;mapCombineFirstKeys=null;
+ renderTowerMap();scheduleCloudSync(200);
+ mapCombineStatus('Pins combined. Coordinates unchanged. Wait for Synced ✓.');
+ return true;
 }
-function combineSelectedMapPins(){
- const records=selectedMapCombineRecords();
- const status=document.getElementById('mapCombineStatus');
- if(records.length<2){if(status)status.textContent='Select at least two tower records.';return;}
- const entries=records.map(record=>({record,effective:record}));
- if(!entries.every(e=>sameMapCarrier(entries[0],e))){if(status)status.textContent='Cannot combine different carriers. Select records from one carrier only.';return;}
- // Keep existing group members together when extending a group.
+function separateMapPin(keys){
+ const records=mapRecordsForKeys(keys);
  const ids=new Set(records.map(r=>r.mapPinGroup).filter(Boolean));
- const id=records.find(r=>r.mapPinGroup)?.mapPinGroup||'manual-'+Date.now().toString(36);
- for(const r of DB.records){if(records.includes(r)||ids.has(r.mapPinGroup)&&r.mapPinGroup)r.mapPinGroup=id;}
- saveLocal('Manual map pin combine');scheduleCloudSync(200);renderTowerMap();
- if(status)status.textContent='Combined. Original coordinates preserved. Waiting for cloud sync.';
-}
-function separateSelectedMapPins(){
- const records=selectedMapCombineRecords();const status=document.getElementById('mapCombineStatus');
- if(!records.length){if(status)status.textContent='Select a grouped tower record first.';return;}
- const ids=new Set(records.map(r=>r.mapPinGroup).filter(Boolean));
- if(!ids.size){if(status)status.textContent='Selected records are not combined.';return;}
- for(const r of DB.records){if(ids.has(r.mapPinGroup))delete r.mapPinGroup;}
- saveLocal('Manual map pin separation');scheduleCloudSync(200);renderTowerMap();
- if(status)status.textContent='Separated. Original coordinates preserved. Waiting for cloud sync.';
+ if(!ids.size){mapCombineStatus('This pin is not a manual group.');return;}
+ const members=DB.records.filter(r=>ids.has(r.mapPinGroup));
+ const previous=members.map(r=>({r,id:r.mapPinGroup}));
+ try{members.forEach(r=>delete r.mapPinGroup);saveLocal('Separate pin from map');}
+ catch(err){previous.forEach(({r,id})=>r.mapPinGroup=id);mapCombineStatus('Could not separate: '+String(err?.message||err));return;}
+ renderTowerMap();scheduleCloudSync(200);
+ mapCombineStatus('Pins separated. Coordinates unchanged. Wait for Synced ✓.');
 }
 function renderTowerMap(){
  if(!towerMap||!DB)return;
@@ -1007,7 +1012,21 @@ function renderTowerMap(){
    marker.bindPopup('<div style="min-width:215px;max-height:300px;overflow-y:auto;line-height:1.5;color:#172033">'+
      '<div style="font-weight:800;font-size:16px;margin-bottom:5px">'+heading+'</div>'+entries+
      (selected?'<div><b>Drag to move selected tower only</b></div>':'')+'</div>',{maxWidth:350,autoPan:true,closeButton:true});
-   marker.on('click',()=>marker.openPopup());
+   marker.on('click',()=>{
+     if(mapPinTapped(site)){marker.closePopup();return;}
+     marker.openPopup();
+   });
+   if(site.some(e=>e.record.mapPinGroup)){
+     marker.on('popupopen',ev=>{
+       const content=ev.popup.getElement()?.querySelector('.leaflet-popup-content');
+       if(!content||content.querySelector('[data-separate-map-pin]'))return;
+       const btn=document.createElement('button');
+       btn.type='button';btn.dataset.separateMapPin='1';btn.textContent='Separate Pin';
+       btn.style.cssText='width:100%;padding:8px;margin-top:8px';
+       btn.addEventListener('click',()=>separateMapPin(site.map(e=>keyOf(e.record))));
+       content.appendChild(btn);
+     });
+   }
    // Every saved pin can be held and dragged. Persist immediately on release.
    // Move only the records represented by this one carrier pin; never another carrier.
    marker.on('dragstart',()=>{ marker.closePopup(); });
@@ -1018,9 +1037,8 @@ function renderTowerMap(){
    if(selected){activeMapEditMarker=marker;marker.openPopup();}
    towerMarkers.push(marker);
  }
- renderMapCombineChoices();
  const status=document.getElementById('mapStatus');
- if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Hold and drag a pin to move its manually combined records (or a single record). Pins have no automatic spacing; only manually combined records share one pin.`;
+ if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Hold and drag a pin to move it. To group pins, tap Combine Pins and select two pins on the map. Different carriers cannot combine.`;
 }
 
 // Save a dragged marker as one atomic edit for the records represented by
