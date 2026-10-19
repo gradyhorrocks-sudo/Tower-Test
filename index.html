@@ -464,7 +464,7 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <section id="tab-map" class="hidden">
 <div class="card">
 <h3>Tower Map</h3>
-<p class="muted small">Saved tower coordinates appear as pins. Use the map control to switch between Street Map and Satellite imagery. Tap a pin to view the tower, or edit a tower to add coordinates.</p>
+<p class="muted small">Saved tower coordinates appear as pins. Hold and drag a pin to move it; release to save and sync. Tap a pin to see all records for that carrier at the site. Different carriers remain separate.</p>
 <div class="row">
 <button class="secondary" onclick="fitTowerMap()">Show All Saved Towers</button>
 <button class="secondary" onclick="centerMapOnDevice()">My Current Location</button>
@@ -960,7 +960,7 @@ function renderTowerMap(){
    // Offset collocated carriers on screen so their separate pins remain clickable.
    const colocated=sites.filter(other=>samePhysicalLocation(other[0],site[0]));
    const position=colocated.length>1 && !selected ? offsetCarrierPin(anchor.latitude,anchor.longitude,colocated.indexOf(site),colocated.length) : [anchor.latitude,anchor.longitude];
-   const marker=L.marker(position,{draggable:!!selected,icon}).addTo(towerMap);
+   const marker=L.marker(position,{draggable:true,autoPan:true,icon}).addTo(towerMap);
    const heading=site.length===1?esc(anchor.effective.site||anchor.record.site||'Unnamed tower'):esc(anchor.effective.site||anchor.record.site||'Tower site')+' ('+site.length+' records)';
    const entries=site.map((entry,i)=>{
      const r=entry.record,er=entry.effective;
@@ -976,18 +976,58 @@ function renderTowerMap(){
      '<div style="font-weight:800;font-size:16px;margin-bottom:5px">'+heading+'</div>'+entries+
      (selected?'<div><b>Drag to move selected tower only</b></div>':'')+'</div>',{maxWidth:350,autoPan:true,closeButton:true});
    marker.on('click',()=>marker.openPopup());
-   if(selected){
-     activeMapEditMarker=marker;
-     marker.on('dragend',ev=>{
-       const ll=ev.target.getLatLng();
-       saveMapEditedLocation(selected.record,ll.lat,ll.lng,false);
-     });
-     marker.openPopup();
-   }
+   // Every saved pin can be held and dragged. Persist immediately on release.
+   // Move only the records represented by this one carrier pin; never another carrier.
+   marker.on('dragstart',()=>{ marker.closePopup(); });
+   marker.on('dragend',ev=>{
+     const ll=ev.target.getLatLng();
+     persistDraggedCarrierPin(site,ll.lat,ll.lng,marker);
+   });
+   if(selected){activeMapEditMarker=marker;marker.openPopup();}
    towerMarkers.push(marker);
  }
  const status=document.getElementById('mapStatus');
- if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Only colocated records from the same carrier share a pin; different carriers always have separate pins.`;
+ if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Hold and drag a pin to move and save that carrier’s colocated records. Other carriers never move.`;
+}
+
+// Save a dragged marker as one atomic edit for the records represented by
+// that marker (same carrier and same original physical location only).
+function persistDraggedCarrierPin(site,lat,lon,marker){
+ if(!DB||!site?.length||!validCoord(lat,-90,90)||!validCoord(lon,-180,180)){
+   renderTowerMap();return;
+ }
+ const originals=[];
+ for(const entry of site){
+   const identity=keyOf(entry.record);
+   const idx=DB.records.findIndex(r=>keyOf(r)===identity);
+   if(idx<0){renderTowerMap();alert('Tower record not found. Location not saved.');return;}
+   originals.push({idx,record:cloneRecord(DB.records[idx])});
+ }
+ for(const {idx} of originals){
+   DB.records[idx]={...DB.records[idx],latitude:Number(lat).toFixed(6),longitude:Number(lon).toFixed(6)};
+ }
+ try{saveLocal('Dragged map pin for '+(site[0].record.site||'tower'));}
+ catch(e){
+   for(const {idx,record} of originals)DB.records[idx]=record;
+   renderTowerMap();alert('Unable to save moved pin: '+String(e?.message||e));return;
+ }
+ for(const {record} of originals){
+   const staged=pendingTowerChanges[keyOf(record)];
+   if(staged){
+     delete staged.changes.latitude;delete staged.changes.longitude;
+     if(!Object.keys(staged.changes).length)delete pendingTowerChanges[keyOf(record)];
+   }
+ }
+ pendingTowerLocationChange=null;
+ const actions=document.getElementById('pendingLocationActions');
+ if(actions)actions.classList.add('hidden');
+ refreshPendingChangesUI();
+ renderTowerMap();
+ towerMap.setView([lat,lon],towerMap.getZoom());
+ toast('Pin saved. Syncing to cloud…');
+ const status=document.getElementById('mapEditStatus');
+ if(status)status.textContent='Pin moved and saved locally. Wait for Synced ✓ before closing the app.';
+ scheduleCloudSync(200);
 }
 
 

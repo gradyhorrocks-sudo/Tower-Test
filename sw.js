@@ -1,4 +1,4 @@
-const CACHE='mctr-location-preserve-v89';
+const CACHE='mctr-pin-drag-sync-v90';
 
 const CORE=[
  './',
