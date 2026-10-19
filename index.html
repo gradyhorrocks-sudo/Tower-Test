@@ -508,7 +508,7 @@ Map pin colors:
 
 <div class="card" style="margin-top:14px">
 <h3>Place / Drag Tower</h3>
-<p class="muted small">Enter an eNB or gNB, then choose the tower. Tap the map to move it, or drag its pin to fine-tune the location. Changes save immediately.</p>
+<p class="muted small">Enter an eNB or gNB, then choose the tower. Tap the map to preview its location, then save the location and save all changes.</p>
 <div class="grid">
 <div>
 <label>eNB / gNB</label>
@@ -1472,7 +1472,7 @@ function universalRecordCard(r,matchText){
    </div>
    ${matchText?`<div style="margin-top:10px"><b>Match:</b> ${esc(matchText)}</div>`:''}
    ${r.notes?`<div class="small muted" style="margin-top:8px">${esc(r.notes)}</div>`:''}
-   <div class="row" style="margin-top:12px"><button type="button" onclick='openSearchResultInEdit(${JSON.stringify(keyOf(r))})'>Add/Edit Info</button></div>
+   <div class="row" style="margin-top:12px"><button type="button" onclick='openSearchResultInEdit(${JSON.stringify(keyOf(r))})'>Add/Edit Info</button><button type="button" class="secondary" onclick='pickLookupTowerOnMap(${JSON.stringify(keyOf(r))})'>Pick Location on Map</button></div>
  </div>`;
 }
 
@@ -1663,6 +1663,28 @@ function universalLookup(){
  }
 
  out.innerHTML=found.map(r=>universalRecordCard(r,meta.get(keyOf(r))||'')).join('');
+}
+
+function pickLookupTowerOnMap(k){
+ const record=DB?.records?.find(r=>keyOf(r)===k);
+ if(!record){alert('Tower not found in the registry.');return;}
+ if(pendingTowerLocationChange){alert('Save or cancel the current location preview first.');return;}
+ locationPickMode=false;
+ activeMapEditRecord=record;
+ const idField=document.getElementById('mapEditId');
+ if(idField)idField.value=record.eNB||record.gNB||'';
+ showTab('map',document.querySelectorAll('.tab')[3]);
+ setTimeout(()=>{
+   ensureTowerMap();
+   if(!towerMap)return;
+   towerMap.invalidateSize();
+   renderTowerMap();
+   const lat=Number(record.latitude),lon=Number(record.longitude);
+   if(validCoord(record.latitude,-90,90)&&validCoord(record.longitude,-180,180))towerMap.setView([lat,lon],16);
+   const status=document.getElementById('mapEditStatus');
+   if(status)status.textContent='Selected '+(record.site||'tower')+' ('+(record.eNB||record.gNB)+'). Tap the map to preview a pin, then tap Save Location and Save All Changes.';
+   document.getElementById('towerMap')?.scrollIntoView({behavior:'smooth',block:'center'});
+ },150);
 }
 
 function clearUniversalSearch(){
