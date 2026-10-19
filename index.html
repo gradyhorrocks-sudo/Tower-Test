@@ -412,9 +412,9 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <div><label>PCI</label><input id="sPci"></div>
 <div><label>TAC</label><input id="sTac"></div>
 <div style="grid-column:1/-1;margin-top:4px"><b>Scanned Signal Values</b><div class="small">These belong to the scanned tower result and can be edited before Save All.</div></div>
-<div><label>RSRP</label><input id="sRsrp" inputmode="decimal" placeholder="e.g. -95"></div>
-<div><label>RSRQ</label><input id="sRsrq" inputmode="decimal" placeholder="e.g. -12"></div>
-<div><label>SNR / SINR</label><input id="sSnr" inputmode="decimal" placeholder="e.g. 18.5"></div>
+<div><label>RSRP</label><input id="sRsrp" inputmode="decimal"></div>
+<div><label>RSRQ</label><input id="sRsrq" inputmode="decimal"></div>
+<div><label>SNR / SINR</label><input id="sSnr" inputmode="decimal"></div>
 </div>
 <div style="margin-top:12px">
   <button id="scanSaveAllBtn" class="good" type="button" onclick="saveAllScanEdits()" style="width:100%;font-size:1.05rem">Save All</button>
@@ -432,12 +432,12 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <p class="muted small">Use this when someone texts you signal values. No screenshot, Cell ID, or tower information is required.</p>
 
 <label for="manualSignalText">Paste the text you received</label>
-<textarea id="manualSignalText" style="min-height:96px" placeholder="RSRP: -111&#10;RSRQ: -9&#10;SNR/SINR: 3.2"></textarea>
+<textarea id="manualSignalText" style="min-height:96px"></textarea>
 
 <div class="grid" style="margin-top:12px">
-  <div><label for="manualRsrp">RSRP</label><input id="manualRsrp" inputmode="decimal" placeholder="-111"></div>
-  <div><label for="manualRsrq">RSRQ</label><input id="manualRsrq" inputmode="decimal" placeholder="-9"></div>
-  <div><label for="manualSnr">SNR / SINR</label><input id="manualSnr" inputmode="decimal" placeholder="3.2"></div>
+  <div><label for="manualRsrp">RSRP</label><input id="manualRsrp" inputmode="decimal"></div>
+  <div><label for="manualRsrq">RSRQ</label><input id="manualRsrq" inputmode="decimal"></div>
+  <div><label for="manualSnr">SNR / SINR</label><input id="manualSnr" inputmode="decimal"></div>
 </div>
 
 <div class="small muted" style="margin-top:8px">You can also enter several readings separated by spaces or commas. The analyzer uses the average.</div>
@@ -487,15 +487,15 @@ Map pin colors:
 
 <div class="card" style="margin-top:14px">
 <h3>Set / Move Tower Location by eNB/gNB</h3>
-<p class="muted small">Enter an eNB or gNB, then paste coordinates such as <b>40.455500, -109.528700</b>. The matching tower will be updated without opening Add/Edit.</p>
+<p class="muted small">Enter an existing tower ID and its coordinates or map link. The tower will be updated without opening Add/Edit.</p>
 <div class="grid">
 <div>
 <label>Existing Tower eNB / gNB</label>
-<input id="mapUpdateId" inputmode="numeric" placeholder="1070">
+<input id="mapUpdateId" inputmode="numeric">
 </div>
 <div>
 <label>Coordinates or Maps Link</label>
-<input id="mapUpdateCoords" placeholder="40.455500, -109.528700 or Apple/Google Maps link">
+<input id="mapUpdateCoords" placeholder="Enter coordinates or Maps link">
 </div>
 </div>
 <div style="margin-top:10px">
@@ -512,7 +512,7 @@ Map pin colors:
 <div class="grid">
 <div>
 <label>eNB / gNB</label>
-<input id="mapEditId" inputmode="numeric" placeholder="1070">
+<input id="mapEditId" inputmode="numeric">
 </div>
 <div style="align-self:end">
 <button onclick="selectTowerForMapEdit()">Select Tower</button><button class="secondary" style="margin-top:8px" onclick="stopTowerMapEdit()">Stop Editing</button>
@@ -593,20 +593,20 @@ Map pin colors:
 <input type="hidden" id="editKey">
 <div class="grid">
 <div><label>Carrier</label><input id="fCarrier" list="carrierList" placeholder="Carrier name" oninput="syncPlmn();autofillTowerById()"></div>
-<div><label>PLMN</label><input id="fPlmn" inputmode="numeric" placeholder="e.g. 310260" oninput="this.dataset.auto='0'"></div>
+<div><label>PLMN</label><input id="fPlmn" inputmode="numeric" oninput="this.dataset.auto='0'"></div>
 <div><label>Radio</label><select id="fRadio" onchange="updateIdLabel();autofillTowerById()"><option>LTE</option><option>5G</option></select></div>
 <div><label id="idLabel">eNB</label><input id="fId" inputmode="numeric" oninput="autofillTowerById()"></div>
 <div><label>Site name</label><input id="fSite" placeholder="Tower/site name"></div>
 <div><label>Status</label><select id="fStatus"><option value="confirmed">Confirmed</option><option value="provisional">Provisional ?</option><option value="unknown">Unmapped / Unknown ?</option></select></div>
-<div><label>Bands</label><input id="fBands" placeholder="B2 B12 B66 / n41"></div>
-<div><label>Bandwidth</label><input id="fBandwidth" placeholder="100 MHz"></div>
+<div><label>Bands</label><input id="fBands"></div>
+<div><label>Bandwidth</label><input id="fBandwidth"></div>
 <div><label>Cell ID / NCI</label><input id="fCell" inputmode="numeric" oninput="calcFormIds()"></div>
 <div><label>Sector / local cell</label><input id="fLocal" inputmode="numeric" oninput="calcFormReverse()"></div>
 <div><label>PCI</label><input id="fPci" inputmode="numeric"></div>
 <div><label>TAC</label><input id="fTac" inputmode="numeric"></div>
 
-<div><label>Latitude</label><input id="fLat" inputmode="decimal" placeholder="40.4555"></div>
-<div><label>Longitude</label><input id="fLon" inputmode="decimal" placeholder="-109.5287"></div>
+<div><label>Latitude</label><input id="fLat" inputmode="decimal"></div>
+<div><label>Longitude</label><input id="fLon" inputmode="decimal"></div>
 
 </div>
 
@@ -1023,7 +1023,7 @@ function setTowerLocationById(){
  if(!id){status.textContent='Enter an eNB or gNB.';return;}
  const coords=parseMapsLocation(raw);
  if(!coords){
-   status.textContent='Paste decimal coordinates or an Apple Maps / Google Maps link containing coordinates.';
+   status.textContent='Paste coordinates or an Apple Maps / Google Maps link.';
    return;
  }
 

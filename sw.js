@@ -1,4 +1,4 @@
-const CACHE='mctr-save-confirmation-v77';
+const CACHE='mctr-clean-inputs-v79';
 
 const CORE=[
  './',
