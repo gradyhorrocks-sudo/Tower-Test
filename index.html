@@ -2140,6 +2140,7 @@ const CLOUD_SYNC_DEVICE_KEY='towerRegistryCloudDeviceId_v34';
 const CLOUD_SYNC_PIN_KEY='towerRegistryCloudPin_v34';
 let cloudSyncBusy=false;
 let cloudSyncTimer=null;
+let cloudInitialDownloadComplete=false;
 
 function cloudDeviceId(){
  let id=localStorage.getItem(CLOUD_SYNC_DEVICE_KEY);
@@ -2249,6 +2250,29 @@ async function cloudSyncNow(force=false){
  }
  cloudSyncBusy=true;
  try{
+   setCloudSyncStatus('☁ Syncing…');
+   // A Home Screen installation has separate storage from Safari. Always read
+   // the existing cloud registry BEFORE the first upload in this app session.
+   // Never send an empty/partial fresh install to the server before this read.
+   if(!cloudInitialDownloadComplete){
+     setCloudSyncStatus('☁ Downloading existing towers…');
+     const initial=await fetch(base+'/.netlify/functions/registry-sync',{
+       method:'GET',headers:{'x-tower-pin':cloudSyncPin()},cache:'no-store'
+     });
+     const initialRaw=await initial.text();
+     let cloud={};
+     try{cloud=JSON.parse(initialRaw||'{}')}catch(e){}
+     if(!initial.ok||!cloud.ok||!cloud.registry||!Array.isArray(cloud.registry.records)){
+       throw new Error('Initial cloud download failed (HTTP '+initial.status+'). Upload blocked to protect existing towers.');
+     }
+     DB=mergeCloudRegistry(DB,cloud.registry);
+     localStorage.setItem('masterTowerRegistry',JSON.stringify(DB));
+     saveOfflineRegistryCopy(DB,Number(cloud.revision||0));
+     const prev=getCloudState();
+     setCloudState({...prev,remoteRevision:Number(cloud.revision||0),baseline:cloneJson(DB)});
+     cloudInitialDownloadComplete=true;
+     try{renderRegistry();renderTowerMap();showOfflineRegistryStatus()}catch(e){}
+   }
    stampRegistryForSync();
    const state=getCloudState();
    setCloudSyncStatus('☁ Syncing…');
@@ -2291,7 +2315,7 @@ async function cloudSyncNow(force=false){
    clearOfflineUploadQueue();
    showOfflineUploadStatus();
    setCloudSyncStatus('☁ Synced ✓',true);
-   try{renderRegistry()}catch(e){}
+   try{renderRegistry();renderTowerMap();showOfflineRegistryStatus()}catch(e){}
  }catch(e){
    const state=getCloudState();
    state.pending=true;
