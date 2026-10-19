@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
 <head>
-<!-- Master Cellular Tower Registry frontend v75: simple missing-tower Yes/No prompt -->
+<!-- Master Cellular Tower Registry frontend v76: reject empty map coordinates; preserve existing registry and sync -->
 
 <!-- Frontend v72: direct-URL recorded-click workflow diagnostics -->
 <meta charset="utf-8">
@@ -804,6 +804,7 @@ let streetLayer=null;
 let satelliteLayer=null;
 
 function validCoord(v,min,max){
+ if(v===undefined||v===null||String(v).trim()==='')return false;
  const n=Number(v);
  return Number.isFinite(n)&&n>=min&&n<=max;
 }
@@ -890,8 +891,9 @@ function renderTowerMap(){
  activeMapEditMarker=null;
 
  for(const r of DB.records){
-   const er=getEffectiveRecord(r); const lat=Number(er.latitude),lon=Number(er.longitude);
-   if(!validCoord(lat,-90,90)||!validCoord(lon,-180,180))continue;
+   const er=getEffectiveRecord(r);
+   if(!validCoord(er.latitude,-90,90)||!validCoord(er.longitude,-180,180))continue;
+   const lat=Number(er.latitude),lon=Number(er.longitude);
 
    const editing=activeMapEditRecord && keyOf(activeMapEditRecord)===keyOf(r);
    const marker=L.marker([lat,lon],{draggable:!!editing,icon:carrierMapIcon(r)}).addTo(towerMap);
@@ -913,7 +915,7 @@ function renderTowerMap(){
  }
 
  const status=document.getElementById('mapStatus');
- if(status)status.textContent=`${towerMarkers.length} saved tower location${towerMarkers.length===1?'':'s'} shown.`;
+ if(status)status.textContent=`${towerMarkers.length} saved tower location${towerMarkers.length===1?'':'s'} shown. ${DB.records.length-towerMarkers.length} records lack valid coordinates.`;
 }
 
 
@@ -1235,7 +1237,7 @@ function saveAllPendingChanges(){
 
   if(!pendingCount){
     refreshPendingChangesUI();
-    showSaveAllSuccess('Everything is already saved.');
+    showSaveAllSuccess('No local changes pending. Check the cloud Sync indicator for upload confirmation.');
     return;
   }
 
@@ -1289,7 +1291,7 @@ function saveAllPendingChanges(){
  refreshUniversalLookupIfPresent();
     if(towerMap)renderTowerMap();
 
-    showSaveAllSuccess(`✓ ${saved} change${saved===1?'':'s'} saved successfully.`);
+    showSaveAllSuccess(`✓ ${saved} change${saved===1?'':'s'} saved on this device. Cloud confirmation is pending until Sync says Synced ✓.`);
   }catch(e){
     alert('Could not save all changes: '+String(e&&e.message||e));
   }
@@ -2893,8 +2895,20 @@ function saveRecordOnce(){
  try{
    ok=coreSaveRecord()===true;
  }catch(err){
-   console.error(err);
-   toast('Save failed. Please try again.');
+   console.error('Save handler error:',err);
+   // A post-save rendering exception must not trigger a duplicate retry.
+   const carrier=document.getElementById('fCarrier')?.value||'';
+   const radio=document.getElementById('fRadio')?.value||'';
+   const id=document.getElementById('fId')?.value?.trim()||'';
+   const key=`${carrier}|${radio}|${id}`;
+   const present=!!id && (DB?.records||[]).some(r=>keyOf(r)===key);
+   if(present){
+     try{saveLocal('verified after save handler exception')}catch(e){console.error(e)}
+     ok=true;
+     setCloudSyncStatus('☁ Tower saved locally • cloud confirmation pending');
+   }else{
+     toast('Save not confirmed. Check the registry before retrying.');
+   }
  }
 
  if(ok){
@@ -2920,7 +2934,7 @@ function coreSaveRecord(){
  const newKey=`${carrier}|${radio}|${id}`;
  const existingIndex=DB.records.findIndex(r=>keyOf(r)===newKey);
  if(existingIndex>=0 && newKey!==oldKey){
-   document.getElementById('duplicateWarn').innerHTML='<div class="notice"><b>Duplicate blocked.</b> That carrier + radio + ID already exists. Edit the existing record instead.</div>';
+   document.getElementById('duplicateWarn').innerHTML='<div class="notice"><b>Tower already exists.</b> Your earlier save may have succeeded. Find this tower in Lookup to edit it. No duplicate was created.</div>';
    return false;
  }
  const plmnValue=document.getElementById('fPlmn').value.trim();
