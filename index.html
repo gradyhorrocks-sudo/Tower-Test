@@ -471,6 +471,13 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 </div>
 <div id="towerMap" style="margin-top:12px"></div>
 <div id="mapStatus" class="small muted mapHint"></div>
+<div class="card" style="margin-top:12px;padding:12px">
+ <b>Manual pin grouping</b>
+ <p class="small muted">Select records from the same carrier to combine into one map pin. Grouping does not change their saved coordinates. To separate a group, select any member and tap Separate.</p>
+ <div id="mapCombineChoices" style="max-height:190px;overflow:auto;margin:8px 0"></div>
+ <div class="row"><button type="button" onclick="combineSelectedMapPins()">Combine selected</button><button type="button" class="secondary" onclick="separateSelectedMapPins()">Separate selected</button></div>
+ <div id="mapCombineStatus" class="small muted"></div>
+</div>
 
 <div class="small muted" style="margin-top:8px">
 Map pin colors:
@@ -903,7 +910,7 @@ function siteLocationForName(name){
 }
 // One marker per carrier per physical site; each record retains its own identity.
 // No distance threshold and no visual coordinate offset.
-// Tower grouping uses the site name and carrier identity only.
+// Tower grouping uses manual group IDs and carrier identity only.
 // Keep carrier groups separate even when records have no explicit PLMN.
 // A missing PLMN must NEVER cause two different carrier names to merge.
 function mapCarrierIdentity(entry){
@@ -921,21 +928,45 @@ function sameMapCarrier(a,b){
  if(!x.name || !y.name)return !!(x.plmn && y.plmn && x.plmn===y.plmn);
  return x.name===y.name;
 }
-// Group only same-carrier records at the same named physical site when
-// their real saved coordinates are within 25 meters. This is a geographic
-// tolerance, NOT a minimum pin separation or a coordinate adjustment.
-function mapDistanceMeters(a,b){
- const toRad=Math.PI/180;
- const dLat=(b.latitude-a.latitude)*toRad;
- const dLon=(b.longitude-a.longitude)*toRad;
- const lat1=a.latitude*toRad,lat2=b.latitude*toRad;
- const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
- return 12742000*Math.asin(Math.min(1,Math.sqrt(h)));
-}
+// Explicit group IDs only. A matching name or proximity never combines pins.
 function samePhysicalSite(a,b){
- const nameA=physicalSiteName(a.effective||a.record);
- const nameB=physicalSiteName(b.effective||b.record);
- return !!nameA && nameA===nameB && sameMapCarrier(a,b) && mapDistanceMeters(a,b)<=25;
+ const x=a.record?.mapPinGroup, y=b.record?.mapPinGroup;
+ return !!(x&&y&&x===y&&sameMapCarrier(a,b));
+}
+function mapGroupRecordLabel(r){return `${r.site||'Unnamed'} | ${r.carrier||'Unknown'} | ${r.radio||''} ${r.eNB||r.gNB||''}`;}
+function renderMapCombineChoices(){
+ const box=document.getElementById('mapCombineChoices');if(!box||!DB)return;
+ const old=new Set([...box.querySelectorAll('input:checked')].map(x=>x.value));
+ box.innerHTML=DB.records.filter(r=>validCoord(r.latitude,-90,90)&&validCoord(r.longitude,-180,180)).map(r=>{
+  const k=keyOf(r),group=r.mapPinGroup?` [group ${String(r.mapPinGroup).slice(-6)}]`:'';
+  return `<label style="display:block;padding:3px"><input type="checkbox" class="map-combine-choice" value="${esc(k)}" ${old.has(k)?'checked':''}> ${esc(mapGroupRecordLabel(r)+group)}</label>`;
+ }).join('')||'<span class="small muted">Add coordinates to towers before combining their pins.</span>';
+}
+function selectedMapCombineRecords(){
+ const keys=new Set([...document.querySelectorAll('.map-combine-choice:checked')].map(x=>x.value));
+ return DB.records.filter(r=>keys.has(keyOf(r)));
+}
+function combineSelectedMapPins(){
+ const records=selectedMapCombineRecords();
+ const status=document.getElementById('mapCombineStatus');
+ if(records.length<2){if(status)status.textContent='Select at least two tower records.';return;}
+ const entries=records.map(record=>({record,effective:record}));
+ if(!entries.every(e=>sameMapCarrier(entries[0],e))){if(status)status.textContent='Cannot combine different carriers. Select records from one carrier only.';return;}
+ // Keep existing group members together when extending a group.
+ const ids=new Set(records.map(r=>r.mapPinGroup).filter(Boolean));
+ const id=records.find(r=>r.mapPinGroup)?.mapPinGroup||'manual-'+Date.now().toString(36);
+ for(const r of DB.records){if(records.includes(r)||ids.has(r.mapPinGroup)&&r.mapPinGroup)r.mapPinGroup=id;}
+ saveLocal('Manual map pin combine');scheduleCloudSync(200);renderTowerMap();
+ if(status)status.textContent='Combined. Original coordinates preserved. Waiting for cloud sync.';
+}
+function separateSelectedMapPins(){
+ const records=selectedMapCombineRecords();const status=document.getElementById('mapCombineStatus');
+ if(!records.length){if(status)status.textContent='Select a grouped tower record first.';return;}
+ const ids=new Set(records.map(r=>r.mapPinGroup).filter(Boolean));
+ if(!ids.size){if(status)status.textContent='Selected records are not combined.';return;}
+ for(const r of DB.records){if(ids.has(r.mapPinGroup))delete r.mapPinGroup;}
+ saveLocal('Manual map pin separation');scheduleCloudSync(200);renderTowerMap();
+ if(status)status.textContent='Separated. Original coordinates preserved. Waiting for cloud sync.';
 }
 function renderTowerMap(){
  if(!towerMap||!DB)return;
@@ -987,8 +1018,9 @@ function renderTowerMap(){
    if(selected){activeMapEditMarker=marker;marker.openPopup();}
    towerMarkers.push(marker);
  }
+ renderMapCombineChoices();
  const status=document.getElementById('mapStatus');
- if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Hold and drag a pin to move the records for that named site and carrier. Pins have no automatic spacing; same-carrier records within 25 m at the same named site share one pin.`;
+ if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Hold and drag a pin to move its manually combined records (or a single record). Pins have no automatic spacing; only manually combined records share one pin.`;
 }
 
 // Save a dragged marker as one atomic edit for the records represented by
