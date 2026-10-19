@@ -1,4 +1,4 @@
-const CACHE='mctr-current61-speedtest-result-region-lock-offline-ocr-v1';
+const CACHE='mctr-current61-backup-export-restored-v2';
 
 const CORE=[
  './',

@@ -301,6 +301,7 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <button class="tab" onclick="showTab('map',this)">Map</button>
 <button class="tab" onclick="showTab('speed',this)">Speed Test</button>
 <button class="tab" onclick="showTab('add',this)">Add/Edit</button>
+<button class="tab" onclick="downloadSafeTowerBackup()">Backup / Export</button>
 </div>
 <div id="workBranchBanner" style="margin:8px 0 12px;padding:8px 12px;border:1px solid #475569;border-radius:10px;background:#111827;font-size:13px">
 </div>
@@ -2994,6 +2995,23 @@ function deleteRecord(k){
  stageExistingTowerChange(r,{__delete:true},'Delete tower');
  toast('Deletion added to pending changes.');
  refreshUniversalLookupIfPresent();
+}
+function downloadSafeTowerBackup(){
+ try {
+   if(typeof DB==='undefined' || !DB || !Array.isArray(DB.records)){
+     alert('Registry is not loaded yet. Please wait and try again.'); return;
+   }
+   const count=DB.records.length;
+   if(!count){ alert('No tower records are currently loaded. No backup was downloaded.'); return; }
+   const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+   const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
+   const url=URL.createObjectURL(blob);
+   const a=document.createElement('a');
+   a.href=url; a.download='Master_Cellular_Tower_Registry_Backup_'+stamp+'.json';
+   document.body.appendChild(a); a.click(); a.remove();
+   setTimeout(()=>URL.revokeObjectURL(url),60000);
+   alert('Backup requested for '+count+' currently loaded tower records. Check Downloads or Files. No towers were modified or uploaded.');
+ }catch(e){alert('Backup failed: '+String(e&&e.message||e));}
 }
 function exportRegistry(){
  const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Master_Cellular_Tower_Registry_Backup.json';a.click();URL.revokeObjectURL(a.href);toast('Registry exported.');
