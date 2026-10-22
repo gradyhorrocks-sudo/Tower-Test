@@ -508,7 +508,7 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 </div>
 <div id="mapFullscreenPanel" class="map-fullscreen-panel">
 <div class="map-fullscreen-toolbar"><strong id="mapToolbarTitle">Map &amp; Tower Search</strong><div class="map-fullscreen-actions"><button id="mapSearchToggle" type="button" onclick="toggleFullscreenMapSearch()" hidden aria-expanded="false">⌕ Search</button><button id="mapFullscreenToggle" type="button" onclick="toggleTowerMapFullscreen()" aria-pressed="false">⛶ Full Screen</button></div></div>
-<div class="card" style="margin-top:12px;padding:12px"><b>Find towers on map</b><p class="small muted">Search tower name, carrier, PLMN, eNB, gNB, or Cell ID. Separate multiple searches with semicolons or new lines. Searches saved towers offline; never changes coordinates.</p><textarea id="mapTowerSearch" rows="2" style="width:100%;box-sizing:border-box" placeholder="Mazer Mountain; 312290; 1038; 265728" aria-label="Tower map search"></textarea><div class="row"><button type="button" onclick="searchTowersOnMap()">Find Towers</button><button type="button" class="secondary" onclick="clearTowerMapSearch()">Clear Search</button></div><div class="map-filter-controls" style="margin-top:12px;padding:10px;border:1px solid #b7c4d3;border-radius:10px;display:grid;gap:8px"><b>Filter visible map towers</b><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:8px"><label>Carrier / PLMN<select id="mapFilterCarrier" onchange="applyTowerMapFilters()" style="width:100%"><option value="">All carriers</option></select></label><label>Network<select id="mapFilterNetwork" onchange="applyTowerMapFilters()" style="width:100%"><option value="">All networks</option><option value="lte">LTE / 4G</option><option value="5g">5G</option></select></label><label>eNB / gNB number<input id="mapFilterEnb" type="search" placeholder="e.g. 13132" oninput="applyTowerMapFilters()" style="width:100%" /></label></div><div class="row"><button type="button" class="secondary" onclick="clearTowerMapFilters()">Clear Filters</button><span id="mapFilterStatus" class="small muted" role="status" aria-live="polite"></span></div></div><div id="mapTowerSearchStatus" class="small muted" role="status" aria-live="polite"></div><div id="mapTowerSearchResults" style="max-height:300px;overflow-y:auto"></div></div><div id="towerMap" style="margin-top:12px"></div>
+<div class="card" style="margin-top:12px;padding:12px"><b>Find towers on map</b><p class="small muted">Search tower name, carrier, PLMN, eNB, gNB, or Cell ID. Separate multiple searches with semicolons or new lines. Searches saved towers offline; never changes coordinates.</p><textarea id="mapTowerSearch" rows="2" style="width:100%;box-sizing:border-box" placeholder="Mazer Mountain; 312290; 1038; 265728" aria-label="Tower map search"></textarea><div class="row"><button type="button" onclick="searchTowersOnMap()">Find Towers</button><button type="button" class="secondary" onclick="clearTowerMapSearch()">Clear Search</button></div><div class="map-filter-controls" style="margin-top:12px;padding:10px;border:1px solid #b7c4d3;border-radius:10px;display:grid;gap:8px"><b>Filter visible map towers</b><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:8px"><label>Carrier / PLMN<select id="mapFilterCarrier" onchange="applyTowerMapFilters()" style="width:100%"><option value="">All carriers</option></select></label><label>Network<select id="mapFilterNetwork" onchange="applyTowerMapFilters()" style="width:100%"><option value="">All networks</option><option value="lte">LTE / 4G</option><option value="5g">5G</option></select></label><label>eNB / gNB number<input id="mapFilterEnb" type="search" placeholder="e.g. 13132" oninput="applyTowerMapFilters()" style="width:100%" /></label></div><div class="row"><button type="button" class="secondary" onclick="clearTowerMapFilters()">Clear Filters</button><span id="mapFilterStatus" class="small muted" role="status" aria-live="polite"></span></div></div><div id="mapTowerSearchStatus" class="small muted" role="status" aria-live="polite"></div><div id="mapTowerSearchResults" style="max-height:300px;overflow-y:auto"></div></div><div id="towerMap" style="margin-top:12px"></div><div id="mapDragSaveControls" class="row hidden" style="position:relative;z-index:1001;margin-top:10px;padding:10px;border:1px solid #3f9874;border-radius:10px;background:#122b25"><button type="button" class="good" onclick="saveAllMapMoves()">✓ Save All Map Moves</button><button type="button" class="secondary" onclick="cancelAllMapMoves()">Cancel Moves</button><span id="mapDragSaveStatus" class="small">Drag the tower as many times as needed. Nothing is saved until Save All.</span></div>
 </div><!-- mapFullscreenPanel -->
 <div class="card" style="margin-top:12px;padding:12px">
  <h3>Towers without map locations</h3>
@@ -561,22 +561,15 @@ Tower carrier colors:
 </div>
 
 <div class="card hidden" id="mapEditCard" style="margin-top:14px">
-<h3>Place / Drag Tower</h3>
-<p class="muted small">Enter an eNB or gNB, then choose the tower. Tap the map to preview its location, then tap Save Location. Wait for Synced ✓.</p>
-<div class="grid">
-<div>
-<label>eNB / gNB</label>
-<input id="mapEditId" inputmode="numeric">
-</div>
-<div style="align-self:end">
-<button onclick="selectTowerForMapEdit()">Select Tower</button><button class="secondary" style="margin-top:8px" onclick="stopTowerMapEdit()">Stop Editing</button>
-</div>
-</div>
-<button type="button" class="secondary" onclick="hideMapLocationControls()" style="margin-top:8px">Close location controls</button><div id="mapEditStatus" class="small muted" style="margin-top:8px"></div>
+<h3>Selected Tower Location</h3>
+<p class="muted small">Tap the map to preview a location for the selected tower, then Save Location. For an existing map pin, choose Move this tower and drag it repeatedly before Save All Map Moves.</p>
+<input id="mapEditId" type="hidden">
+<div id="mapEditStatus" class="small muted" style="margin-top:8px"></div>
 <div id="pendingLocationActions" class="hidden" style="margin-top:10px">
 <button class="good" onclick="savePendingTowerLocation()">Save Location</button>
 <button class="secondary" onclick="cancelPendingTowerLocation()">Cancel</button>
 </div>
+<button type="button" class="secondary" onclick="hideMapLocationControls()" style="margin-top:8px">Close location controls</button>
 </div>
 
 
@@ -867,6 +860,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElement
 let towerMap=null;
 let towerMarkers=[];
 let armedTowerMoveKeys=null;
+let mapMoveDraftKeys=null;
 let activeMapEditRecord=null;
 let activeMapEditMarker=null;
 let pendingScannedTowerForMap=null;
@@ -1444,6 +1438,7 @@ function renderTowerMap(){
      '<div style="font-weight:800;font-size:16px;margin-bottom:5px">'+heading+'</div>'+entries+
      (selected?'<div><b>Drag to move selected tower only</b></div>':'')+'</div>',{maxWidth:350,autoPan:false,closeButton:true});
    marker.on('click',()=>{
+     if(marker.dragging?.enabled())return;
      if(mapPinTapped(site,marker)){marker.closePopup();return;}
      marker.openPopup();
    });
@@ -1463,7 +1458,7 @@ function renderTowerMap(){
      edit.style.cssText='display:block;width:100%;margin-top:6px;padding:8px';
      edit.addEventListener('click',()=>{
        marker.closePopup();showMapLocationControls(site[0].record);
-       document.getElementById('mapEditCard')?.scrollIntoView({behavior:'smooth',block:'nearest'});
+       document.getElementById('towerMap')?.scrollIntoView({behavior:'smooth',block:'nearest'});
      });
      if(!colocated){
        const move=document.createElement('button');move.type='button';
@@ -1471,14 +1466,16 @@ function renderTowerMap(){
        move.style.cssText='display:block;width:100%;margin-top:6px;padding:8px;background:#186f49;color:white';
        move.addEventListener('click',()=>{
          if(marker.dragging.enabled()){
-           marker.dragging.disable();armedTowerMoveKeys=null;
-           marker.closePopup();toast('Tower move canceled. Map scrolling is safe.');
+           marker.dragging.disable();armedTowerMoveKeys=null;mapMoveDraftKeys=null;
+           marker.closePopup();toast('Tower unlocked mode canceled. Staged moves can be canceled separately.');
          }else{
            towerMarkers.forEach(m=>m.dragging?.disable());
            armedTowerMoveKeys=siteKeys.slice();
            marker.dragging.enable();
+           mapMoveDraftKeys=siteKeys.slice();
+           updateMapDragSaveControls();
            marker.closePopup();
-           toast('Tower unlocked. Drag it to the new location; it locks again when released.');
+           toast('Move mode active. Drag repeatedly, then tap Save All Map Moves.');
          }
        });
        actions.appendChild(move);
@@ -1535,10 +1532,12 @@ function renderTowerMap(){
    // Move only the records represented by this one carrier pin; never another carrier.
    marker.on('dragstart',()=>{ if(!marker.dragging.enabled())return; marker.closePopup(); });
    marker.on('dragend',ev=>{
-     marker.dragging.disable();
-     armedTowerMoveKeys=null;
      const ll=ev.target.getLatLng();
-     persistDraggedCarrierPin(site,ll.lat,ll.lng,marker);
+     for(const entry of site)stageExistingTowerChange(entry.record,{latitude:Number(ll.lat).toFixed(6),longitude:Number(ll.lng).toFixed(6)},'Map location move');
+     mapMoveDraftKeys=siteKeys.slice();
+     armedTowerMoveKeys=siteKeys.slice();
+     updateMapDragSaveControls();
+     toast('New position staged. Drag again or tap Save All Map Moves.');
    });
    // Do not reopen the previously edited tower on every registry/cloud refresh: Leaflet auto-pan would snap the viewport back.
    if(selected)activeMapEditMarker=marker;
@@ -1548,8 +1547,36 @@ function renderTowerMap(){
    towerMarkers.push(marker);
  }
  updateTowerSearchHighlights();
+ updateMapDragSaveControls();
  const status=document.getElementById('mapStatus');
- if(status)status.textContent=`${sites.length} map tower icon${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Tap a tower and choose Move this tower to unlock dragging. Dragging locks again after release. To group pins, tap Combine Pins and select two pins on the map. Different carriers cannot combine.`;
+ if(status)status.textContent=`${sites.length} map tower icon${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Tap a tower and choose Move this tower to unlock dragging. Dragging stays unlocked until you save or cancel. To group pins, tap Combine Pins and select two pins on the map. Different carriers cannot combine.`;
+}
+
+function updateMapDragSaveControls(){
+ const el=document.getElementById('mapDragSaveControls');
+ if(!el)return;
+ const pending=Object.values(pendingTowerChanges||{}).filter(x=>x?.description==='Map location move').length;
+ el.classList.toggle('hidden',!pending&&!mapMoveDraftKeys);
+ const status=document.getElementById('mapDragSaveStatus');
+ if(status)status.textContent=pending?`${pending} tower record(s) staged. Drag again freely; tap Save All Map Moves to commit.`:'Drag freely. Nothing is saved until Save All Map Moves.';
+}
+function saveAllMapMoves(){
+ const pending=Object.values(pendingTowerChanges||{}).filter(x=>x?.description==='Map location move');
+ if(!pending.length){toast('No map moves to save.');return;}
+ armedTowerMoveKeys=null;mapMoveDraftKeys=null;
+ saveAllPendingChanges();
+ updateMapDragSaveControls();
+}
+function cancelAllMapMoves(){
+ for(const [key,item] of Object.entries(pendingTowerChanges||{})){
+   if(item?.description==='Map location move'){
+     delete item.changes.latitude;delete item.changes.longitude;
+     if(!Object.keys(item.changes).length)delete pendingTowerChanges[key];
+   }
+ }
+ armedTowerMoveKeys=null;mapMoveDraftKeys=null;
+ refreshPendingChangesUI();renderTowerMap();updateMapDragSaveControls();
+ toast('Unsaved map moves canceled.');
 }
 
 // Save a dragged marker as one atomic edit for the records represented by
@@ -1969,6 +1996,7 @@ function saveAllPendingChanges(){
     saveLocal('Save All tower changes');
 
     pendingTowerChanges={};
+    armedTowerMoveKeys=null;mapMoveDraftKeys=null;
     refreshPendingChangesUI();
 
     window._currentUnknownScanFields=null;
@@ -2007,6 +2035,7 @@ function discardAllPendingChanges(){
  }
  if(!confirm('Discard all unsaved changes to existing towers?'))return;
  pendingTowerChanges={};
+ armedTowerMoveKeys=null;mapMoveDraftKeys=null;
  refreshPendingChangesUI();
  if(towerMap)renderTowerMap();
  renderRegistry();
