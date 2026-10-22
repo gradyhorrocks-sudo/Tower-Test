@@ -1,4 +1,4 @@
-const CACHE='mctr-offline-map-v119';
+const CACHE='mctr-offline-map-v121';
 const TILE_CACHE='mctr-viewed-map-tiles-v99';
 const TILE_LIMIT=450;
 const MAP_LIBS=new Set(['https://unpkg.com/leaflet@1.9.4/dist/leaflet.js','https://unpkg.com/leaflet@1.9.4/dist/leaflet.css']);
@@ -90,7 +90,7 @@ self.addEventListener('fetch',event=>{
  // Save map tiles as the user views them online. No bulk tile downloads.
  // The separate bounded cache limits storage consumption on iOS.
  const isStreetTile=/^(?:[abc]\.)?tile\.openstreetmap\.org$/.test(url.hostname) && /^\/\d+\/\d+\/\d+\.png$/.test(url.pathname);
- const isSatelliteTile=url.hostname==='server.arcgisonline.com' && url.pathname.includes('/World_Imagery/MapServer/tile/');
+ const isSatelliteTile=url.hostname==='server.arcgisonline.com' && (/\/(World_Imagery|World_Transportation|World_Boundaries_and_Places|World_Topo_Map)\/MapServer\/tile\//.test(url.pathname));
  if(isStreetTile||isSatelliteTile){
    event.respondWith((async()=>{
      const cache=await caches.open(TILE_CACHE);

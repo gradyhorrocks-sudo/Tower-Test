@@ -249,7 +249,18 @@ main, .container, .content{
 .map-fullscreen-toolbar button{width:auto;min-width:130px;flex:0 0 auto}
 .map-fullscreen-panel.is-fullscreen{position:fixed!important;inset:0!important;inset:env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0!important;z-index:99999!important;background:#0e1424!important;padding:10px 12px!important;box-sizing:border-box!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}
 .map-fullscreen-panel.is-fullscreen .map-fullscreen-toolbar{flex:0 0 auto;margin:0 0 6px}
-.map-fullscreen-panel.is-fullscreen > .card{flex:0 0 auto;margin:0 0 6px!important;padding:8px 10px!important;max-height:39vh;overflow:auto}
+.map-fullscreen-panel.is-fullscreen > .card{display:none!important;flex:0 0 auto;margin:0 0 6px!important;padding:8px 10px!important;max-height:39vh;overflow:auto}
+.map-fullscreen-panel.is-fullscreen.search-open > .card{display:block!important}
+.map-fullscreen-actions{display:flex;gap:8px;align-items:center}
+.map-fullscreen-panel.is-fullscreen .map-fullscreen-toolbar{position:absolute;z-index:1002;top:calc(env(safe-area-inset-top) + 8px);right:12px;left:12px;pointer-events:none;justify-content:flex-end}
+.map-fullscreen-panel.is-fullscreen .map-fullscreen-toolbar>*{pointer-events:auto}
+.map-fullscreen-panel.is-fullscreen #mapToolbarTitle{display:none}
+.map-fullscreen-panel.is-fullscreen #mapFullscreenToggle{background:#152238!important;border:2px solid white!important;color:white!important;font-weight:800!important;min-width:150px!important;box-shadow:0 3px 12px #0009}
+.map-fullscreen-panel.is-fullscreen #mapSearchToggle{display:inline-block!important;min-width:90px!important}
+.map-fullscreen-panel.is-fullscreen.search-open > .card{position:absolute;z-index:1001;top:calc(env(safe-area-inset-top) + 57px);right:12px;left:12px;box-shadow:0 8px 30px #000a}
+.map-fullscreen-panel.is-fullscreen{padding:0!important;inset:0!important}
+.map-fullscreen-panel.is-fullscreen #towerMap{border:0!important;border-radius:0!important}
+.map-fullscreen-panel.is-fullscreen .leaflet-control-container .leaflet-top{top:62px}
 .map-fullscreen-panel.is-fullscreen > .card p.small{display:none}
 .map-fullscreen-panel.is-fullscreen textarea#mapTowerSearch{height:46px!important;min-height:46px!important;resize:none}
 .map-fullscreen-panel.is-fullscreen #mapTowerSearchResults{max-height:16vh!important;overflow:auto}
@@ -284,6 +295,8 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 </script>
 
 <style id="map-combine-check-style">
+.tower-enb-label{background:rgba(14,20,36,.91)!important;border:1px solid rgba(255,255,255,.65)!important;border-radius:5px!important;color:#fff!important;font-size:11px!important;font-weight:750!important;letter-spacing:.1px!important;padding:2px 5px!important;box-shadow:0 1px 4px #0007!important;white-space:nowrap!important;pointer-events:none!important}
+.tower-enb-label:before{display:none!important}
 .leaflet-marker-icon.map-combine-selected{filter:drop-shadow(0 0 5px #22c55e);}
 .leaflet-marker-icon .map-combine-check{position:absolute;right:-9px;top:-11px;display:flex;align-items:center;justify-content:center;width:25px;height:25px;border-radius:50%;background:#15803d;color:#fff;font-size:19px;font-weight:900;line-height:1;border:2px solid white;box-shadow:0 1px 6px #0008;z-index:9999;pointer-events:none;}
 </style>
@@ -494,7 +507,7 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
  <div id="mapPlaceSearchResults"></div>
 </div>
 <div id="mapFullscreenPanel" class="map-fullscreen-panel">
-<div class="map-fullscreen-toolbar"><strong>Map &amp; Tower Search</strong><button id="mapFullscreenToggle" type="button" onclick="toggleTowerMapFullscreen()" aria-pressed="false">⛶ Full Screen</button></div>
+<div class="map-fullscreen-toolbar"><strong id="mapToolbarTitle">Map &amp; Tower Search</strong><div class="map-fullscreen-actions"><button id="mapSearchToggle" type="button" onclick="toggleFullscreenMapSearch()" hidden aria-expanded="false">⌕ Search</button><button id="mapFullscreenToggle" type="button" onclick="toggleTowerMapFullscreen()" aria-pressed="false">⛶ Full Screen</button></div></div>
 <div class="card" style="margin-top:12px;padding:12px"><b>Find towers on map</b><p class="small muted">Search tower name, carrier, PLMN, eNB, gNB, or Cell ID. Separate multiple searches with semicolons or new lines. Searches saved towers offline; never changes coordinates.</p><textarea id="mapTowerSearch" rows="2" style="width:100%;box-sizing:border-box" placeholder="Mazer Mountain; 312290; 1038; 265728" aria-label="Tower map search"></textarea><div class="row"><button type="button" onclick="searchTowersOnMap()">Find Towers</button><button type="button" class="secondary" onclick="clearTowerMapSearch()">Clear Search</button></div><div id="mapTowerSearchStatus" class="small muted" role="status" aria-live="polite"></div><div id="mapTowerSearchResults" style="max-height:300px;overflow-y:auto"></div></div><div id="towerMap" style="margin-top:12px"></div>
 </div><!-- mapFullscreenPanel -->
 <div class="card" style="margin-top:12px;padding:12px">
@@ -840,12 +853,15 @@ function toggleTowerMapFullscreen(force){
  if(!panel)return;
  const on=typeof force==='boolean'?force:!panel.classList.contains('is-fullscreen');
  panel.classList.toggle('is-fullscreen',on);
+ panel.classList.remove('search-open');
+ const searchBtn=document.getElementById('mapSearchToggle');if(searchBtn){searchBtn.hidden=!on;searchBtn.setAttribute('aria-expanded','false');}
  document.body.classList.toggle('map-fullscreen-active',on);
  const btn=document.getElementById('mapFullscreenToggle');
  if(btn){btn.textContent=on?'✕ Exit Full Screen':'⛶ Full Screen';btn.setAttribute('aria-pressed',String(on));}
  // Leaflet must recalculate its canvas after the panel resizes.
  if(towerMap){requestAnimationFrame(()=>{towerMap.invalidateSize({pan:false});setTimeout(()=>towerMap.invalidateSize({pan:false}),180);});}
 }
+function toggleFullscreenMapSearch(){const panel=document.getElementById('mapFullscreenPanel');if(!panel?.classList.contains('is-fullscreen'))return;const open=panel.classList.toggle('search-open');document.getElementById('mapSearchToggle')?.setAttribute('aria-expanded',String(open));if(open)document.getElementById('mapTowerSearch')?.focus();}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('mapFullscreenPanel')?.classList.contains('is-fullscreen'))toggleTowerMapFullscreen(false);});
 
 let towerMap=null;
@@ -907,7 +923,7 @@ function parseMapsLocation(raw){
 
 function ensureTowerMap(){
  if(towerMap || !window.L)return;
- towerMap=L.map('towerMap').setView([40.3,-109.5],8);
+ towerMap=L.map('towerMap',{zoomControl:true,preferCanvas:true}).setView([40.3,-109.5],8);
  const mapHint=document.getElementById('offlineMapHint');
  function updateMapOfflineHint(){if(mapHint)mapHint.textContent=navigator.onLine?'Offline map ready to cache: pan and zoom around the areas you need while connected. Previously viewed map tiles remain available offline (subject to device storage).':'Offline map mode: previously viewed tiles are available. Blank or labeled areas were not cached; pins still use your saved coordinates.';}
  window.addEventListener('online',updateMapOfflineHint);
@@ -921,8 +937,17 @@ function ensureTowerMap(){
    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
    {maxZoom:19, attribution:'Tiles &copy; Esri'}
  );
- streetLayer.addTo(towerMap);
- L.control.layers({'Street Map':streetLayer,'Satellite':satelliteLayer},null,{collapsed:false}).addTo(towerMap);
+ const topoLayer=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,maxNativeZoom:19,attribution:'Tiles &copy; Esri'});
+ const imageryLabels=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Labels &copy; Esri'});
+ const roadsReference=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,maxNativeZoom:19,attribution:'Roads &copy; Esri'});
+ const satelliteWithRoads=L.layerGroup([satelliteLayer,roadsReference,imageryLabels]);
+ const satelliteWithLabels=L.layerGroup([satelliteLayer,imageryLabels]);
+ // Preserve the user's last chosen basemap between visits, without resetting their viewport.
+ let preferred='Satellite + Roads';try{preferred=localStorage.getItem('mctr-basemap-v121')||localStorage.getItem('mctr-basemap-v120')||preferred;}catch(e){}
+ const baseMaps={'Satellite + Roads':satelliteWithRoads,'Satellite + Labels':satelliteWithLabels,'Satellite':satelliteLayer,'Topographic':topoLayer,'Street Map':streetLayer};
+ (baseMaps[preferred]||satelliteWithRoads).addTo(towerMap);
+ L.control.layers(baseMaps,null,{collapsed:true,position:'bottomright'}).addTo(towerMap);
+ towerMap.on('baselayerchange',ev=>{try{localStorage.setItem('mctr-basemap-v121',ev.name);}catch(e){}});
 
  towerMap.on('click',e=>{
    if(pendingScannedTowerForMap && typeof finishScannedTowerMapPlacement==='function'){
@@ -1344,12 +1369,15 @@ function renderTowerMap(){
    const anchor=selected||site[0];
    const colocated=site.length>1&&site.some(e=>!sameMapCarrier(site[0],e));
    const icon=colocated?colocatedTowerIcon(site):carrierMapIcon(anchor.record);
+   const idLabels=[...new Set(site.map(e=>String(e.effective.eNB||e.record.eNB||e.effective.gNB||e.record.gNB||'').trim()).filter(Boolean))];
+   const mapIdLabel=idLabels.join(', ');
    // Render at the exact saved location: no forced separation or minimum spacing.
    const position=[anchor.latitude,anchor.longitude];
    // Shared multicarrier tower is not draggable: moving it would silently move unrelated carriers.
    // Individual towers remain draggable, including manually combined same-carrier sites.
    const siteKeys=site.map(e=>keyOf(e.record));
-   const marker=L.marker(position,{draggable:false,autoPan:true,icon}).addTo(towerMap);
+   const marker=L.marker(position,{draggable:false,autoPan:false,icon}).addTo(towerMap);
+   if(mapIdLabel){marker.bindTooltip(esc(mapIdLabel),{permanent:true,direction:'right',offset:colocated?[8,-24]:[6,-16],opacity:.96,className:'tower-enb-label',interactive:false});}
    marker._towerMoveKeys=siteKeys;
    if(!colocated&&armedTowerMoveKeys&&siteKeys.some(k=>armedTowerMoveKeys.includes(k)))marker.dragging.enable();
    const heading=colocated?'Colocated site · '+siteCarrierGroups(site).size+' carriers ('+site.length+' eNB/gNB records)':site.length===1?esc(anchor.effective.site||anchor.record.site||'Unnamed tower'):esc(anchor.effective.site||anchor.record.site||'Tower site')+' ('+site.length+' records)';
@@ -1365,7 +1393,7 @@ function renderTowerMap(){
    }).join('');
    marker.bindPopup('<div style="min-width:215px;max-height:300px;overflow-y:auto;line-height:1.5;color:#172033">'+
      '<div style="font-weight:800;font-size:16px;margin-bottom:5px">'+heading+'</div>'+entries+
-     (selected?'<div><b>Drag to move selected tower only</b></div>':'')+'</div>',{maxWidth:350,autoPan:true,closeButton:true});
+     (selected?'<div><b>Drag to move selected tower only</b></div>':'')+'</div>',{maxWidth:350,autoPan:false,closeButton:true});
    marker.on('click',()=>{
      if(mapPinTapped(site,marker)){marker.closePopup();return;}
      marker.openPopup();
@@ -1463,7 +1491,8 @@ function renderTowerMap(){
      const ll=ev.target.getLatLng();
      persistDraggedCarrierPin(site,ll.lat,ll.lng,marker);
    });
-   if(selected){activeMapEditMarker=marker;marker.openPopup();}
+   // Do not reopen the previously edited tower on every registry/cloud refresh: Leaflet auto-pan would snap the viewport back.
+   if(selected)activeMapEditMarker=marker;
    marker._towerSearchKeys=site.map(e=>keyOf(e.record));
    towerMarkers.push(marker);
  }
@@ -2038,18 +2067,18 @@ function colocatedTowerIcon(site){
  }).join('');
  const badge='<circle cx="27" cy="27" r="15" fill="#132033" stroke="white" stroke-width="2"/><text x="27" y="32" fill="white" font-size="15" font-weight="800" text-anchor="middle">'+n+'</text>';
  const tower='<g stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M27 52 L17 78 M27 52 L37 78 M19 70 H35 M22 61 H32"/></g><g stroke="#293447" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M27 52 L17 78 M27 52 L37 78 M19 70 H35 M22 61 H32"/></g>';
- const html='<svg width="54" height="82" viewBox="0 0 54 82" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Colocated tower, '+n+' carriers, '+site.length+' tower records"><circle cx="27" cy="27" r="25" fill="white"/>'+sectors+badge+tower+'</svg>';
- return L.divIcon({className:'',html,iconSize:[54,82],iconAnchor:[27,78],popupAnchor:[0,-70]});
+ const html='<svg width="36" height="55" viewBox="0 0 54 82" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Colocated tower, '+n+' carriers, '+site.length+' tower records"><circle cx="27" cy="27" r="25" fill="white"/>'+sectors+badge+tower+'</svg>';
+ return L.divIcon({className:'',html,iconSize:[36,55],iconAnchor:[18,52],popupAnchor:[0,-50]});
 }
 function carrierMapIcon(record){
  const plmn=(typeof registryPlmnForRecord==='function') ? registryPlmnForRecord(record) : (record.plmn||'');
  const color=carrierMapColor(record.carrier,plmn);
  return L.divIcon({
    className:'',
-   html:`<svg width="40" height="48" viewBox="0 0 40 48" xmlns="http://www.w3.org/2000/svg" aria-label="Cell tower"><g stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M20 5 L6 44 M20 5 L34 44 M10 33 H30 M14 23 H26 M6 44 H34"/></g><g stroke="${color}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M20 5 L6 44 M20 5 L34 44 M10 33 H30 M14 23 H26 M6 44 H34 M12 5 Q4 12 12 19 M28 5 Q36 12 28 19"/></g><circle cx="20" cy="5" r="4" fill="${color}" stroke="white" stroke-width="1.5"/></svg>`,
-   iconSize:[40,48],
-   iconAnchor:[20,44],
-   popupAnchor:[0,-42]
+   html:`<svg width="26" height="32" viewBox="0 0 40 48" xmlns="http://www.w3.org/2000/svg" aria-label="Cell tower"><g stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M20 5 L6 44 M20 5 L34 44 M10 33 H30 M14 23 H26 M6 44 H34"/></g><g stroke="${color}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M20 5 L6 44 M20 5 L34 44 M10 33 H30 M14 23 H26 M6 44 H34 M12 5 Q4 12 12 19 M28 5 Q36 12 28 19"/></g><circle cx="20" cy="5" r="4" fill="${color}" stroke="white" stroke-width="1.5"/></svg>`,
+   iconSize:[26,32],
+   iconAnchor:[13,30],
+   popupAnchor:[0,-30]
  });
 }
 
