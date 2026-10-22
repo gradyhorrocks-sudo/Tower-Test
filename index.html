@@ -1228,10 +1228,10 @@ function refreshMapCarrierFilter(){
  for(const [key,label] of entries)sel.add(new Option(label,key));
  if(entries.some(([key])=>key===current))sel.value=current;
 }
-function applyTowerMapFilters(){updateTowerSearchHighlights();}
+function applyTowerMapFilters(){if(towerMap)renderTowerMap();}
 function clearTowerMapFilters(){
  for(const id of ['mapFilterCarrier','mapFilterNetwork','mapFilterEnb']){const el=document.getElementById(id);if(el)el.value='';}
- updateTowerSearchHighlights();
+ if(towerMap)renderTowerMap();
 }
 function updateTowerSearchHighlights(){
  if(!towerMap)return;
@@ -1239,7 +1239,7 @@ function updateTowerSearchHighlights(){
  towerMarkers.forEach(m=>{
   const keys=m._towerSearchKeys||[];
   const match=!mapTowerSearchActive||keys.some(k=>mapTowerSearchMatches.has(k));
-  const filterMatch=(m._towerSiteRecords||[]).some(r=>mapFilterMatches(r));
+  const filterMatch=(m._towerVisibleRecords||[]).length>0;
   const show=match&&filterMatch;
   if(show){
    visible++;
@@ -1255,15 +1255,15 @@ function clearTowerMapSearch(){
  mapTowerSearchActive=false;mapTowerSearchMatches.clear();
  document.getElementById('mapTowerSearchResults')?.replaceChildren();
  const status=document.getElementById('mapTowerSearchStatus');if(status)status.textContent='Search cleared. All map pins are visible.';
- updateTowerSearchHighlights();
+ renderTowerMap();
 }
 function searchTowersOnMap(){
  const terms=mapTowerTerms(),status=document.getElementById('mapTowerSearchStatus'),out=document.getElementById('mapTowerSearchResults');out.replaceChildren();mapTowerSearchMatches.clear();
- if(!terms.length){mapTowerSearchActive=false;status.textContent='Enter one or more tower names, PLMNs, eNBs or Cell IDs.';updateTowerSearchHighlights();return;}
+ if(!terms.length){mapTowerSearchActive=false;status.textContent='Enter one or more tower names, PLMNs, eNBs or Cell IDs.';renderTowerMap();return;}
  if(!DB?.records){status.textContent='Registry is not loaded.';return;}
  mapTowerSearchActive=true;
  const matches=DB.records.filter(r=>terms.some(t=>mapTowerMatches(r,t)));
- matches.forEach(r=>mapTowerSearchMatches.add(keyOf(r)));updateTowerSearchHighlights();
+ matches.forEach(r=>mapTowerSearchMatches.add(keyOf(r)));renderTowerMap();
  const located=matches.filter(r=>{const e=getEffectiveRecord(r);return validCoord(e.latitude,-90,90)&&validCoord(e.longitude,-180,180)});
  status.textContent=matches.length+' matching records; '+located.length+' mapped. Only matching pins are shown in their carrier colors. Tap a result to zoom.';
  if(located.length&&towerMap){const pts=located.map(r=>{const e=getEffectiveRecord(r);return [Number(e.latitude),Number(e.longitude)]});if(pts.length===1)towerMap.setView(pts[0],15);else towerMap.fitBounds(L.latLngBounds(pts),{padding:[30,30],maxZoom:14});}
@@ -1409,11 +1409,16 @@ function renderTowerMap(){
    site.push(entry);
  }
  for(const site of sites){
+   // Filter at the record level, not just the physical-site level. A colocated
+   // marker must display ONLY matching carrier IDs and matching carrier colors.
+   const displaySite=site.filter(e=>mapFilterMatches(e.record)&&(!mapTowerSearchActive||mapTowerSearchMatches.has(keyOf(e.record))));
+   const visibleSite=displaySite.length?displaySite:site;
    const selected=site.find(e=>activeMapEditRecord&&keyOf(activeMapEditRecord)===keyOf(e.record));
    const anchor=selected||site[0];
    const colocated=site.length>1&&site.some(e=>!sameMapCarrier(site[0],e));
-   const icon=colocated?colocatedTowerIcon(site):carrierMapIcon(anchor.record);
-   const idLabels=[...new Set(site.map(e=>String(e.effective.eNB||e.record.eNB||e.effective.gNB||e.record.gNB||'').trim()).filter(Boolean))];
+   const visibleColocated=visibleSite.length>1&&visibleSite.some(e=>!sameMapCarrier(visibleSite[0],e));
+   const icon=visibleColocated?colocatedTowerIcon(visibleSite):carrierMapIcon(visibleSite[0].record);
+   const idLabels=[...new Set(visibleSite.map(e=>String(e.effective.eNB||e.record.eNB||e.effective.gNB||e.record.gNB||'').trim()).filter(Boolean))];
    const mapIdLabel=idLabels.join(', ');
    // Render at the exact saved location: no forced separation or minimum spacing.
    const position=[anchor.latitude,anchor.longitude];
@@ -1421,11 +1426,11 @@ function renderTowerMap(){
    // Individual towers remain draggable, including manually combined same-carrier sites.
    const siteKeys=site.map(e=>keyOf(e.record));
    const marker=L.marker(position,{draggable:false,autoPan:false,icon}).addTo(towerMap);
-   if(mapIdLabel){marker.bindTooltip(esc(mapIdLabel),{permanent:true,direction:'right',offset:colocated?[8,-24]:[6,-16],opacity:.96,className:'tower-enb-label',interactive:false});}
+   if(mapIdLabel){marker.bindTooltip(esc(mapIdLabel),{permanent:true,direction:'right',offset:visibleColocated?[8,-24]:[6,-16],opacity:.96,className:'tower-enb-label',interactive:false});}
    marker._towerMoveKeys=siteKeys;
    if(!colocated&&armedTowerMoveKeys&&siteKeys.some(k=>armedTowerMoveKeys.includes(k)))marker.dragging.enable();
-   const heading=colocated?'Colocated site · '+siteCarrierGroups(site).size+' carriers ('+site.length+' eNB/gNB records)':site.length===1?esc(anchor.effective.site||anchor.record.site||'Unnamed tower'):esc(anchor.effective.site||anchor.record.site||'Tower site')+' ('+site.length+' records)';
-   const entries=site.map((entry,i)=>{
+   const heading=visibleColocated?'Colocated site · '+siteCarrierGroups(visibleSite).size+' carriers ('+visibleSite.length+' eNB/gNB records)':visibleSite.length===1?esc(anchor.effective.site||anchor.record.site||'Unnamed tower'):esc(anchor.effective.site||anchor.record.site||'Tower site')+' ('+visibleSite.length+' records)';
+   const entries=visibleSite.map((entry,i)=>{
      const r=entry.record,er=entry.effective;
      const towerId=er.eNB||r.eNB||er.gNB||r.gNB||'Not recorded';
      const idLabel=(er.eNB||r.eNB)?'LTE eNB':'5G gNB';
@@ -1539,6 +1544,7 @@ function renderTowerMap(){
    if(selected)activeMapEditMarker=marker;
    marker._towerSearchKeys=site.map(e=>keyOf(e.record));
    marker._towerSiteRecords=site.map(e=>e.record);
+   marker._towerVisibleRecords=displaySite.map(e=>e.record);
    towerMarkers.push(marker);
  }
  updateTowerSearchHighlights();
