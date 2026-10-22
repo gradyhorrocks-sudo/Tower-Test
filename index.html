@@ -508,7 +508,7 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 </div>
 <div id="mapFullscreenPanel" class="map-fullscreen-panel">
 <div class="map-fullscreen-toolbar"><strong id="mapToolbarTitle">Map &amp; Tower Search</strong><div class="map-fullscreen-actions"><button id="mapSearchToggle" type="button" onclick="toggleFullscreenMapSearch()" hidden aria-expanded="false">⌕ Search</button><button id="mapFullscreenToggle" type="button" onclick="toggleTowerMapFullscreen()" aria-pressed="false">⛶ Full Screen</button></div></div>
-<div class="card" style="margin-top:12px;padding:12px"><b>Find towers on map</b><p class="small muted">Search tower name, carrier, PLMN, eNB, gNB, or Cell ID. Separate multiple searches with semicolons or new lines. Searches saved towers offline; never changes coordinates.</p><textarea id="mapTowerSearch" rows="2" style="width:100%;box-sizing:border-box" placeholder="Mazer Mountain; 312290; 1038; 265728" aria-label="Tower map search"></textarea><div class="row"><button type="button" onclick="searchTowersOnMap()">Find Towers</button><button type="button" class="secondary" onclick="clearTowerMapSearch()">Clear Search</button></div><div class="map-filter-controls" style="margin-top:12px;padding:10px;border:1px solid #b7c4d3;border-radius:10px;display:grid;gap:8px"><b>Filter visible map towers</b><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:8px"><label>Carrier / PLMN<select id="mapFilterCarrier" onchange="applyTowerMapFilters()" style="width:100%"><option value="">All carriers</option></select></label><label>Network<select id="mapFilterNetwork" onchange="applyTowerMapFilters()" style="width:100%"><option value="">All networks</option><option value="lte">LTE / 4G</option><option value="5g">5G</option></select></label><label>eNB / gNB number<input id="mapFilterEnb" type="search" placeholder="e.g. 13132" oninput="applyTowerMapFilters()" style="width:100%" /></label></div><div class="row"><button type="button" class="secondary" onclick="clearTowerMapFilters()">Clear Filters</button><span id="mapFilterStatus" class="small muted" role="status" aria-live="polite"></span></div></div><div id="mapTowerSearchStatus" class="small muted" role="status" aria-live="polite"></div><div id="mapTowerSearchResults" style="max-height:300px;overflow-y:auto"></div></div><div id="towerMap" style="margin-top:12px"></div><div id="mapDragSaveControls" class="row hidden" style="position:relative;z-index:1001;margin-top:10px;padding:10px;border:1px solid #3f9874;border-radius:10px;background:#122b25"><button type="button" class="good" onclick="saveAllMapMoves()">✓ Save All Map Moves</button><button type="button" class="secondary" onclick="cancelAllMapMoves()">Cancel Moves</button><span id="mapDragSaveStatus" class="small">Drag the tower as many times as needed. Nothing is saved until Save All.</span></div>
+<div class="card" style="margin-top:12px;padding:12px"><b>Find towers on map</b><p class="small muted">Search tower name, carrier, PLMN, eNB, gNB, or Cell ID. Separate multiple searches with semicolons or new lines. Searches saved towers offline; never changes coordinates.</p><textarea id="mapTowerSearch" rows="2" style="width:100%;box-sizing:border-box" placeholder="Mazer Mountain; 312290; 1038; 265728" aria-label="Tower map search"></textarea><div class="row"><button type="button" onclick="searchTowersOnMap()">Find Towers</button><button type="button" class="secondary" onclick="clearTowerMapSearch()">Clear Search</button></div><div class="map-filter-controls" style="margin-top:12px;padding:10px;border:1px solid #b7c4d3;border-radius:10px;display:grid;gap:8px"><b>Filter visible map towers</b><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:8px"><label>Carrier / PLMN<select id="mapFilterCarrier" onchange="applyTowerMapFilters()" style="width:100%"><option value="">All carriers</option></select></label><label>Network<select id="mapFilterNetwork" onchange="applyTowerMapFilters()" style="width:100%"><option value="">All networks</option><option value="lte">LTE / 4G</option><option value="5g">5G</option></select></label><label>eNB / gNB labels (hide nonmatching numbers only)<input id="mapFilterEnb" type="search" placeholder="e.g. 13132" oninput="applyTowerMapFilters()" style="width:100%" /></label></div><div class="row"><button type="button" class="secondary" onclick="clearTowerMapFilters()">Clear Filters</button><span id="mapFilterStatus" class="small muted" role="status" aria-live="polite"></span></div></div><div id="mapTowerSearchStatus" class="small muted" role="status" aria-live="polite"></div><div id="mapTowerSearchResults" style="max-height:300px;overflow-y:auto"></div></div><div id="towerMap" style="margin-top:12px"></div><div id="mapDragSaveControls" class="row hidden" style="position:relative;z-index:1001;margin-top:10px;padding:10px;border:1px solid #3f9874;border-radius:10px;background:#122b25"><button type="button" class="good" onclick="saveAllMapMoves()">✓ Save All Map Moves</button><button type="button" class="secondary" onclick="cancelAllMapMoves()">Cancel Moves</button><span id="mapDragSaveStatus" class="small">Drag the tower as many times as needed. Nothing is saved until Save All.</span></div>
 </div><!-- mapFullscreenPanel -->
 <div class="card" style="margin-top:12px;padding:12px">
  <h3>Towers without map locations</h3>
@@ -1196,14 +1196,14 @@ function mapNetworkClass(r){
  if(/lte|4g/.test(radio)||String(e.eNB||r.eNB||'').trim())return 'lte';
  return 'other';
 }
-function mapFilterMatches(r){
+function mapFilterMatches(r,ignoreEnb=false){
  const carrier=document.getElementById('mapFilterCarrier')?.value||'';
  const network=document.getElementById('mapFilterNetwork')?.value||'';
  const enb=String(document.getElementById('mapFilterEnb')?.value||'').trim().toLowerCase();
  const e=getEffectiveRecord(r);
  if(carrier&&mapTowerPlmn(r)!==carrier&&('name:'+String(e.carrier||r.carrier||'').trim().toLowerCase())!==carrier)return false;
  if(network&&mapNetworkClass(r)!==network)return false;
- if(enb&&!String(e.eNB||r.eNB||e.gNB||r.gNB||'').toLowerCase().includes(enb))return false;
+ if(!ignoreEnb&&enb&&!String(e.eNB||r.eNB||e.gNB||r.gNB||'').toLowerCase().includes(enb))return false;
  return true;
 }
 function refreshMapCarrierFilter(){
@@ -1242,7 +1242,7 @@ function updateTowerSearchHighlights(){
    if(el){el.style.filter=mapTowerSearchActive?'drop-shadow(0 0 6px #16c784)':'';el.style.opacity='1';}
   }else if(towerMap.hasLayer(m))towerMap.removeLayer(m);
  });
- const status=document.getElementById('mapFilterStatus');if(status)status.textContent=visible+' of '+towerMarkers.length+' map sites visible';
+ const status=document.getElementById('mapFilterStatus');if(status)status.textContent=visible+' of '+towerMarkers.length+' map sites visible · eNB filter hides labels, not tower locations';
 }
 function clearTowerMapSearch(){
  const input=document.getElementById('mapTowerSearch');if(input)input.value='';
@@ -1405,14 +1405,15 @@ function renderTowerMap(){
  for(const site of sites){
    // Filter at the record level, not just the physical-site level. A colocated
    // marker must display ONLY matching carrier IDs and matching carrier colors.
-   const displaySite=site.filter(e=>mapFilterMatches(e.record)&&(!mapTowerSearchActive||mapTowerSearchMatches.has(keyOf(e.record))));
+   const displaySite=site.filter(e=>mapFilterMatches(e.record,true)&&(!mapTowerSearchActive||mapTowerSearchMatches.has(keyOf(e.record))));
    const visibleSite=displaySite.length?displaySite:site;
+   const labelSite=visibleSite.filter(e=>mapFilterMatches(e.record));
    const selected=site.find(e=>activeMapEditRecord&&keyOf(activeMapEditRecord)===keyOf(e.record));
    const anchor=selected||site[0];
    const colocated=site.length>1&&site.some(e=>!sameMapCarrier(site[0],e));
    const visibleColocated=visibleSite.length>1&&visibleSite.some(e=>!sameMapCarrier(visibleSite[0],e));
    const icon=visibleColocated?colocatedTowerIcon(visibleSite):carrierMapIcon(visibleSite[0].record);
-   const idLabels=[...new Set(visibleSite.map(e=>String(e.effective.eNB||e.record.eNB||e.effective.gNB||e.record.gNB||'').trim()).filter(Boolean))];
+   const idLabels=[...new Set(labelSite.map(e=>String(e.effective.eNB||e.record.eNB||e.effective.gNB||e.record.gNB||'').trim()).filter(Boolean))];
    const mapIdLabel=idLabels.join(', ');
    // Render at the exact saved location: no forced separation or minimum spacing.
    const position=[anchor.latitude,anchor.longitude];
@@ -1424,7 +1425,8 @@ function renderTowerMap(){
    marker._towerMoveKeys=siteKeys;
    if(!colocated&&armedTowerMoveKeys&&siteKeys.some(k=>armedTowerMoveKeys.includes(k)))marker.dragging.enable();
    const heading=visibleColocated?'Colocated site · '+siteCarrierGroups(visibleSite).size+' carriers ('+visibleSite.length+' eNB/gNB records)':visibleSite.length===1?esc(anchor.effective.site||anchor.record.site||'Unnamed tower'):esc(anchor.effective.site||anchor.record.site||'Tower site')+' ('+visibleSite.length+' records)';
-   const entries=visibleSite.map((entry,i)=>{
+   const popupSite=document.getElementById('mapFilterEnb')?.value.trim()?labelSite:visibleSite;
+   const entries=popupSite.map((entry,i)=>{
      const r=entry.record,er=entry.effective;
      const towerId=er.eNB||r.eNB||er.gNB||r.gNB||'Not recorded';
      const idLabel=(er.eNB||r.eNB)?'LTE eNB':'5G gNB';
@@ -1435,7 +1437,7 @@ function renderTowerMap(){
        '<div><b>Bands:</b> '+esc(er.bands||r.bands||'Not recorded')+'</div></div>';
    }).join('');
    marker.bindPopup('<div style="min-width:215px;max-height:300px;overflow-y:auto;line-height:1.5;color:#172033">'+
-     '<div style="font-weight:800;font-size:16px;margin-bottom:5px">'+heading+'</div>'+entries+
+     '<div style="font-weight:800;font-size:16px;margin-bottom:5px">'+heading+'</div>'+(entries||'<div>No eNB/gNB at this site matches the number filter.</div>')+
      (selected?'<div><b>Drag to move selected tower only</b></div>':'')+'</div>',{maxWidth:350,autoPan:false,closeButton:true});
    marker.on('click',()=>{
      if(marker.dragging?.enabled())return;
