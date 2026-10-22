@@ -1,4 +1,4 @@
-const CACHE='mctr-offline-map-v117';
+const CACHE='mctr-offline-map-v119';
 const TILE_CACHE='mctr-viewed-map-tiles-v99';
 const TILE_LIMIT=450;
 const MAP_LIBS=new Set(['https://unpkg.com/leaflet@1.9.4/dist/leaflet.js','https://unpkg.com/leaflet@1.9.4/dist/leaflet.css']);

@@ -633,8 +633,8 @@ Tower carrier colors:
 </div><p class="muted small">Type an existing eNB/gNB and the app will autofill all saved details. If a scan or lookup finds an unknown ID, the app can open this form with everything it already knows prefilled. Future carriers are also supported.</p>
 <input type="hidden" id="editKey">
 <div class="grid">
-<div><label>Carrier</label><input id="fCarrier" list="carrierList" placeholder="Carrier name" oninput="syncPlmn();autofillTowerById()"></div>
-<div><label>PLMN</label><input id="fPlmn" inputmode="numeric" oninput="this.dataset.auto='0'"></div>
+<div><label>Carrier</label><input id="fCarrier" list="carrierList" placeholder="Carrier name" oninput="syncPlmn()"></div>
+<div><label>PLMN</label><input id="fPlmn" inputmode="numeric" oninput="syncCarrierFromPlmn()"></div>
 <div><label>Radio</label><select id="fRadio" onchange="updateIdLabel();autofillTowerById()"><option>LTE</option><option>5G</option></select></div>
 <div><label id="idLabel">eNB</label><input id="fId" inputmode="numeric" oninput="autofillTowerById()"></div>
 <div><label>Site name</label><input id="fSite" placeholder="Tower/site name"></div>
@@ -3517,17 +3517,51 @@ function renderRegistry(){
  <div class="record-actions"><button class="secondary" onclick='editRecord(${JSON.stringify(keyOf(r))})'>Edit</button><button class="danger" onclick='deleteRecord(${JSON.stringify(keyOf(r))})'>Delete</button></div>
  </div>`).join('') || '<div class="muted" style="padding:12px">No matching towers.</div>';
 }
+// Carrier and PLMN are linked in both directions. Do not touch tower IDs or records.
+function registryCarrierPlmnPairs(){
+ const pairs=new Map();
+ for(const [carrier,plmn] of Object.entries(PLMNS))pairs.set(String(plmn),carrier);
+ for(const [plmn,carrier] of Object.entries(DB?.plmns||{})){
+  if(/^\d{5,6}$/.test(String(plmn)) && String(carrier||'').trim()){
+   if(!pairs.has(String(plmn)))pairs.set(String(plmn),String(carrier).trim());
+  }
+ }
+ return pairs;
+}
 function syncPlmn(){
- const carrier=document.getElementById('fCarrier').value.trim();
+ const carrierInput=document.getElementById('fCarrier');
  const plmnInput=document.getElementById('fPlmn');
- if(!plmnInput)return;
- const known=PLMNS[carrier] || (DB ? Object.entries(DB.plmns||{}).find(([p,n])=>n===carrier)?.[0] : '');
- if(known && (!plmnInput.value || plmnInput.dataset.auto==='1')){
-   plmnInput.value=known;
-   plmnInput.dataset.auto='1';
- }else if(!known && plmnInput.dataset.auto==='1'){
-   plmnInput.value='';
-   plmnInput.dataset.auto='0';
+ if(!carrierInput||!plmnInput)return;
+ carrierInput.dataset.auto='0';
+ const carrier=carrierInput.value.trim().toLowerCase();
+ if(!carrier){
+  if(plmnInput.dataset.auto==='1'){plmnInput.value='';plmnInput.dataset.auto='0';}
+  return;
+ }
+ let match=Object.entries(PLMNS).find(([name])=>name.toLowerCase()===carrier);
+ let known=match?.[1]||'';
+ if(!known){
+  const entry=Object.entries(DB?.plmns||{}).find(([p,name])=>String(name||'').trim().toLowerCase()===carrier);
+  known=entry?.[0]||'';
+ }
+ // A selected carrier is an explicit choice. Update its PLMN, even when the
+ // old PLMN was entered manually. Unknown carrier names do not erase a PLMN.
+ if(known){plmnInput.value=known;plmnInput.dataset.auto='1';}
+}
+function syncCarrierFromPlmn(){
+ const carrierInput=document.getElementById('fCarrier');
+ const plmnInput=document.getElementById('fPlmn');
+ if(!carrierInput||!plmnInput)return;
+ plmnInput.dataset.auto='0';
+ const plmn=plmnInput.value.trim();
+ const carrier=registryCarrierPlmnPairs().get(plmn);
+ if(carrier){
+  carrierInput.value=carrier;
+  carrierInput.dataset.auto='1';
+ }else if(carrierInput.dataset.auto==='1'){
+  // Do not leave a carrier inferred from a different PLMN.
+  carrierInput.value='';
+  carrierInput.dataset.auto='0';
  }
 }
 function updateIdLabel(){document.getElementById('idLabel').textContent=document.getElementById('fRadio').value==='LTE'?'eNB':'gNB';calcFormIds()}
@@ -3573,9 +3607,11 @@ function autofillTowerById(){
  // Prefer the currently selected radio type, but if there is no match,
  // try both LTE and 5G because the user may type the ID before choosing radio.
  let radio=document.getElementById('fRadio').value;
+ const currentCarrier=document.getElementById('fCarrier').value.trim();
+ const currentPlmn=document.getElementById('fPlmn').value.trim();
  let matches=DB.records.filter(r=>{
    const rid=String(r.eNB||r.gNB||'');
-   return rid===id;
+   return rid===id && !r.__delete;
  });
 
  if(matches.length===0){
@@ -3585,15 +3621,19 @@ function autofillTowerById(){
 
  // If multiple carriers somehow share the same numeric ID, prefer current carrier/radio.
  let rec=
-   matches.find(r=>r.radio===radio && r.carrier===document.getElementById('fCarrier').value.trim()) ||
+   matches.find(r=>r.radio===radio && currentPlmn && String(r.plmn||'')===currentPlmn) ||
+   matches.find(r=>r.radio===radio && currentCarrier && r.carrier===currentCarrier) ||
+   matches.find(r=>r.radio===radio && r.carrier) ||
    matches.find(r=>r.radio===radio) ||
    matches[0];
 
- document.getElementById('fCarrier').value=rec.carrier||'';
+ // Never blank a typed carrier because a legacy record lacks its carrier name.
+ const resolvedCarrier=String(rec.carrier||DB.plmns?.[rec.plmn]||DB.plmns?.[currentPlmn]||currentCarrier||'').trim();
+ if(resolvedCarrier){document.getElementById('fCarrier').value=resolvedCarrier;document.getElementById('fCarrier').dataset.auto='1';}
  document.getElementById('fRadio').value=rec.radio||'LTE';
  updateIdLabel();
 
- const plmn=rec.plmn || (DB.plmns ? Object.entries(DB.plmns).find(([p,n])=>n===rec.carrier)?.[0] : '') || PLMNS[rec.carrier] || '';
+ const plmn=rec.plmn || currentPlmn || (DB.plmns ? Object.entries(DB.plmns).find(([p,n])=>n===resolvedCarrier)?.[0] : '') || PLMNS[resolvedCarrier] || '';
  document.getElementById('fPlmn').value=plmn;
  document.getElementById('fPlmn').dataset.auto='1';
 
@@ -3620,8 +3660,8 @@ function autofillTowerById(){
  }
 
  if(status){
-   const extra=matches.length>1 ? ` (${matches.length} records share this numeric ID; selected ${rec.carrier} ${rec.radio}.)` : '';
-   status.textContent=`Existing tower found: ${rec.site} · ${rec.carrier} · ${rec.radio}.${extra}`;
+   const extra=matches.length>1 ? ` (${matches.length} records share this numeric ID; selected ${resolvedCarrier||'carrier unknown'} ${rec.radio}.)` : '';
+   status.textContent=`Existing tower found: ${rec.site} · ${resolvedCarrier||'carrier unknown'} · ${rec.radio}.${extra}`;
  }
 }
 
@@ -3694,6 +3734,7 @@ function coreSaveRecord(){
  if(!DB)return false;
  const carrier=document.getElementById('fCarrier').value,radio=document.getElementById('fRadio').value,id=document.getElementById('fId').value.trim(),site=document.getElementById('fSite').value.trim();
  if(!id||!site){toast('Tower ID and site name are required.');return false}
+ if(!carrier.trim()){toast('Carrier name is required. Select or enter the carrier before saving.');document.getElementById('fCarrier').focus();return false}
  const oldKey=document.getElementById('editKey').value;
  const newKey=`${carrier}|${radio}|${id}`;
  const existingIndex=DB.records.findIndex(r=>keyOf(r)===newKey);
