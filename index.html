@@ -508,7 +508,7 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 </div>
 <div id="mapFullscreenPanel" class="map-fullscreen-panel">
 <div class="map-fullscreen-toolbar"><strong id="mapToolbarTitle">Map &amp; Tower Search</strong><div class="map-fullscreen-actions"><button id="mapSearchToggle" type="button" onclick="toggleFullscreenMapSearch()" hidden aria-expanded="false">⌕ Search</button><button id="mapFullscreenToggle" type="button" onclick="toggleTowerMapFullscreen()" aria-pressed="false">⛶ Full Screen</button></div></div>
-<div class="card" style="margin-top:12px;padding:12px"><b>Find towers on map</b><p class="small muted">Search tower name, carrier, PLMN, eNB, gNB, or Cell ID. Separate multiple searches with semicolons or new lines. Searches saved towers offline; never changes coordinates.</p><textarea id="mapTowerSearch" rows="2" style="width:100%;box-sizing:border-box" placeholder="Mazer Mountain; 312290; 1038; 265728" aria-label="Tower map search"></textarea><div class="row"><button type="button" onclick="searchTowersOnMap()">Find Towers</button><button type="button" class="secondary" onclick="clearTowerMapSearch()">Clear Search</button></div><div id="mapTowerSearchStatus" class="small muted" role="status" aria-live="polite"></div><div id="mapTowerSearchResults" style="max-height:300px;overflow-y:auto"></div></div><div id="towerMap" style="margin-top:12px"></div>
+<div class="card" style="margin-top:12px;padding:12px"><b>Find towers on map</b><p class="small muted">Search tower name, carrier, PLMN, eNB, gNB, or Cell ID. Separate multiple searches with semicolons or new lines. Searches saved towers offline; never changes coordinates.</p><textarea id="mapTowerSearch" rows="2" style="width:100%;box-sizing:border-box" placeholder="Mazer Mountain; 312290; 1038; 265728" aria-label="Tower map search"></textarea><div class="row"><button type="button" onclick="searchTowersOnMap()">Find Towers</button><button type="button" class="secondary" onclick="clearTowerMapSearch()">Clear Search</button></div><div class="map-filter-controls" style="margin-top:12px;padding:10px;border:1px solid #b7c4d3;border-radius:10px;display:grid;gap:8px"><b>Filter visible map towers</b><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:8px"><label>Carrier / PLMN<select id="mapFilterCarrier" onchange="applyTowerMapFilters()" style="width:100%"><option value="">All carriers</option></select></label><label>Network<select id="mapFilterNetwork" onchange="applyTowerMapFilters()" style="width:100%"><option value="">All networks</option><option value="lte">LTE / 4G</option><option value="5g">5G</option></select></label><label>eNB / gNB number<input id="mapFilterEnb" type="search" placeholder="e.g. 13132" oninput="applyTowerMapFilters()" style="width:100%" /></label></div><div class="row"><button type="button" class="secondary" onclick="clearTowerMapFilters()">Clear Filters</button><span id="mapFilterStatus" class="small muted" role="status" aria-live="polite"></span></div></div><div id="mapTowerSearchStatus" class="small muted" role="status" aria-live="polite"></div><div id="mapTowerSearchResults" style="max-height:300px;overflow-y:auto"></div></div><div id="towerMap" style="margin-top:12px"></div>
 </div><!-- mapFullscreenPanel -->
 <div class="card" style="margin-top:12px;padding:12px">
  <h3>Towers without map locations</h3>
@@ -1195,17 +1195,60 @@ function mapTowerMatches(r,t){
  if(/^\d+$/.test(q)&&enb){try{const n=BigInt(q);if(n>=256n&&String(n/256n)===enb)return true;}catch(_){}}
  return false;
 }
+function mapNetworkClass(r){
+ const e=getEffectiveRecord(r);
+ const radio=String(e.radio||r.radio||e.network||r.network||'').toLowerCase();
+ if(/5g|\bnr\b|new radio/.test(radio)||String(e.gNB||r.gNB||'').trim())return '5g';
+ if(/lte|4g/.test(radio)||String(e.eNB||r.eNB||'').trim())return 'lte';
+ return 'other';
+}
+function mapFilterMatches(r){
+ const carrier=document.getElementById('mapFilterCarrier')?.value||'';
+ const network=document.getElementById('mapFilterNetwork')?.value||'';
+ const enb=String(document.getElementById('mapFilterEnb')?.value||'').trim().toLowerCase();
+ const e=getEffectiveRecord(r);
+ if(carrier&&mapTowerPlmn(r)!==carrier&&('name:'+String(e.carrier||r.carrier||'').trim().toLowerCase())!==carrier)return false;
+ if(network&&mapNetworkClass(r)!==network)return false;
+ if(enb&&!String(e.eNB||r.eNB||e.gNB||r.gNB||'').toLowerCase().includes(enb))return false;
+ return true;
+}
+function refreshMapCarrierFilter(){
+ const sel=document.getElementById('mapFilterCarrier');if(!sel||!DB?.records)return;
+ const current=sel.value;
+ const names=new Map();
+ for(const r of DB.records){
+  if(r.__delete||pendingTowerChanges[keyOf(r)]?.changes?.__delete)continue;
+  const e=getEffectiveRecord(r),name=String(e.carrier||r.carrier||'').trim(),plmn=mapTowerPlmn(r);
+  if(!name&&!plmn)continue;
+  const key=plmn||'name:'+name.toLowerCase();
+  if(!names.has(key))names.set(key,(name||'Unknown carrier')+(plmn?' ('+plmn+')':''));
+ }
+ const entries=[...names.entries()].sort((a,b)=>a[1].localeCompare(b[1]));
+ sel.replaceChildren(new Option('All carriers',''));
+ for(const [key,label] of entries)sel.add(new Option(label,key));
+ if(entries.some(([key])=>key===current))sel.value=current;
+}
+function applyTowerMapFilters(){updateTowerSearchHighlights();}
+function clearTowerMapFilters(){
+ for(const id of ['mapFilterCarrier','mapFilterNetwork','mapFilterEnb']){const el=document.getElementById(id);if(el)el.value='';}
+ updateTowerSearchHighlights();
+}
 function updateTowerSearchHighlights(){
  if(!towerMap)return;
+ let visible=0;
  towerMarkers.forEach(m=>{
-  const match=!!m._towerSearchKeys?.some(k=>mapTowerSearchMatches.has(k));
-  const show=!mapTowerSearchActive||match;
+  const keys=m._towerSearchKeys||[];
+  const match=!mapTowerSearchActive||keys.some(k=>mapTowerSearchMatches.has(k));
+  const filterMatch=(m._towerSiteRecords||[]).some(r=>mapFilterMatches(r));
+  const show=match&&filterMatch;
   if(show){
+   visible++;
    if(!towerMap.hasLayer(m))m.addTo(towerMap);
    const el=m.getElement();
    if(el){el.style.filter=mapTowerSearchActive?'drop-shadow(0 0 6px #16c784)':'';el.style.opacity='1';}
   }else if(towerMap.hasLayer(m))towerMap.removeLayer(m);
  });
+ const status=document.getElementById('mapFilterStatus');if(status)status.textContent=visible+' of '+towerMarkers.length+' map sites visible';
 }
 function clearTowerMapSearch(){
  const input=document.getElementById('mapTowerSearch');if(input)input.value='';
@@ -1347,6 +1390,7 @@ function renderUnmappedTowerList(){
 function renderTowerMap(){
  if(!towerMap||!DB)return;
  renderUnmappedTowerList();
+ refreshMapCarrierFilter();
  towerMarkers.forEach(m=>m.remove());
  towerMarkers=[];
  activeMapEditMarker=null;
@@ -1494,6 +1538,7 @@ function renderTowerMap(){
    // Do not reopen the previously edited tower on every registry/cloud refresh: Leaflet auto-pan would snap the viewport back.
    if(selected)activeMapEditMarker=marker;
    marker._towerSearchKeys=site.map(e=>keyOf(e.record));
+   marker._towerSiteRecords=site.map(e=>e.record);
    towerMarkers.push(marker);
  }
  updateTowerSearchHighlights();
