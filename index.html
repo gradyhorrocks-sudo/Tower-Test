@@ -442,13 +442,14 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <div><label>PCI</label><input id="sPci"></div>
 <div><label>TAC</label><input id="sTac"></div>
 <div><label>Verification status</label><select id="sStatus"><option value="confirmed">Confirmed</option><option value="provisional">Provisional ?</option><option value="unknown">Unmapped / Unknown ?</option></select></div>
+<div style="grid-column:1/-1"><label for="sNotes">Tower Notes</label><textarea id="sNotes" rows="3" style="width:100%;box-sizing:border-box" placeholder="Tower location, backhaul, equipment, observations, or other notes"></textarea></div>
 <div style="grid-column:1/-1;margin-top:4px"><b>Scanned Signal Values</b><div class="small">These belong to the scanned tower result. Changes to an existing tower save automatically after you finish editing a field.</div></div>
 <div><label>RSRP</label><input id="sRsrp" inputmode="decimal"></div>
 <div><label>RSRQ</label><input id="sRsrq" inputmode="decimal"></div>
 <div><label>SNR / SINR</label><input id="sSnr" inputmode="decimal"></div>
 </div>
 <div style="margin-top:12px">
-  <button id="scanSaveAllBtn" class="good" type="button" onclick="saveAllScanEdits()" style="width:100%;font-size:1.05rem">Save All</button>
+  <button id="scanSaveAllBtn" class="good" type="button" onclick="scanRestoreExplicitlyRequested=true;saveAllScanEdits()" style="width:100%;font-size:1.05rem">Save All</button>
   <div id="scanSaveAllStatus" class="small" style="margin-top:7px" role="status" aria-live="polite"></div>
 </div>
 <div style="margin-top:12px">
@@ -4409,7 +4410,7 @@ function findExistingScanTower(carrier,radio,sid){
    String(r.radio||'').trim().toUpperCase()===wantRadio &&
    String(r.eNB||r.gNB||'').replace(/\D/g,'')===id
  );
- return matches.length===1 ? matches[0] : null;
+ return matches.length===1 && !matches[0].__delete ? matches[0] : null;
 }
 
 function autoAddScannedBandToExistingTower(baseRecord,fields){
@@ -5604,6 +5605,7 @@ function enrichSparseLteScan(fields){
 }
 
 
+let scanRestoreExplicitlyRequested=false;
 let activeScanRecordKey='';
 let scanSaveAllBusy=false;
 let scanAutoSaveTimer=null;
@@ -5635,6 +5637,7 @@ function currentScanEditFields(){
    bandwidth:(document.getElementById('sBw')?.value||'').trim(),
    pci:(document.getElementById('sPci')?.value||'').trim(),
    tac:(document.getElementById('sTac')?.value||'').trim(),
+   notes:(document.getElementById('sNotes')?.value||''),
    rsrp:(document.getElementById('sRsrp')?.value||'').trim(),
    rsrq:(document.getElementById('sRsrq')?.value||'').trim(),
    snr:(document.getElementById('sSnr')?.value||'').trim(),
@@ -5660,7 +5663,7 @@ function installScanAutoSave(){
  const root=document.getElementById('scanResults');
  if(!root||root.dataset.autoSaveInstalled==='1')return;
  root.dataset.autoSaveInstalled='1';
- const ids=new Set(['sSite','sPlmn','sRadio','sCell','sId','sLocal','sBand','sBw','sPci','sTac','sRsrp','sRsrq','sSnr','sStatus']);
+ const ids=new Set(['sSite','sPlmn','sRadio','sCell','sId','sLocal','sBand','sBw','sPci','sTac','sRsrp','sRsrq','sSnr','sStatus','sNotes']);
  root.addEventListener('input',e=>{if(ids.has(e.target?.id))queueScanAutoSave();});
  root.addEventListener('change',e=>{if(ids.has(e.target?.id))queueScanAutoSave();});
  root.addEventListener('focusout',e=>{if(ids.has(e.target?.id)&&scanAutoSaveQueued){clearTimeout(scanAutoSaveTimer);scanAutoSaveTimer=setTimeout(flushScanAutoSave,100);}});
@@ -5669,6 +5672,8 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 else installScanAutoSave();
 
 function saveAllScanEdits(){
+ const explicitRestore=scanRestoreExplicitlyRequested;
+ scanRestoreExplicitlyRequested=false;
  clearTimeout(scanAutoSaveTimer);
  scanAutoSaveQueued=false;
  if(scanSaveAllBusy)return false;
@@ -5707,11 +5712,45 @@ function saveAllScanEdits(){
    return false;
  }
 
- const newKey=`${carrier}|${f.radio}|${f.sid}`;
- const conflict=DB.records.find(r=>r!==rec && keyOf(r)===newKey);
- if(conflict){
-   if(st)st.textContent='Save blocked: another registry record already uses this carrier + radio + ID.';
+ // Match the normalized identity, including legacy capitalization variants.
+ // Deleted LTE and 5G identities remain independent.
+ const canonicalCarrier=v=>String(v||'').trim().toLowerCase().replace(/[^a-z0-9]/g,'');
+ const matchesIdentity=r=>canonicalCarrier(r.carrier)===canonicalCarrier(carrier) &&
+   String(r.radio||'').toUpperCase()===f.radio.toUpperCase() &&
+   String(r.eNB||r.gNB||'')===f.sid;
+ const sameIdentity=DB.records.filter(matchesIdentity);
+ const activeMatches=sameIdentity.filter(r=>!r.__delete);
+ if(activeMatches.length>1){
+   if(st)st.textContent='Save blocked: multiple active records share this identity. Resolve duplicates first.';
    return false;
+ }
+ if(activeMatches.length===1)rec=activeMatches[0];
+ else if(sameIdentity.length && f.status!=='confirmed'){
+   if(st)st.textContent='This ID was deleted. Select Confirmed and tap Save All to restore this specific radio record.';
+   return false;
+ }else if(sameIdentity.length){
+   rec=sameIdentity[0];
+ }
+ // A changed identifier must never silently overwrite a different tower.
+ if(!matchesIdentity(rec) && !rec.__delete){
+   if(st)st.textContent='Tower identity changed. Add the new tower separately to avoid overwriting the old one.';
+   return false;
+ }
+ const restoring=!!rec.__delete;
+ // Explicit restoration only, not a passive OCR or auto-save event.
+ if(restoring && !explicitRestore){
+   if(st)st.textContent='Deleted record found. Select Confirmed, then tap Save All to restore it.';
+   return false;
+ }
+ if(restoring && f.status!=='confirmed'){
+   if(st)st.textContent='Select Confirmed before restoring a deleted record.';
+   return false;
+ }
+ // Remove redundant deletion markers for THIS carrier + radio + ID only.
+ // Never touch the LTE tombstone when restoring a 5G record.
+ if(restoring){
+   DB.records=DB.records.filter(r=>r===rec || !matchesIdentity(r) || !r.__delete);
+   delete rec.__delete;
  }
 
  scanSaveAllBusy=true;
@@ -5739,6 +5778,7 @@ function saveAllScanEdits(){
  rec.local_cell=f.local;
  rec.pci=f.pci;
  rec.tac=f.tac;
+ rec.notes=f.notes;
  rec.rsrp=f.rsrp;
  rec.rsrq=f.rsrq;
  rec.snr=f.snr;
@@ -6900,6 +6940,8 @@ function identifyFromScan(fields){
  resetScanSaveAllState();
  const scanStatus=document.getElementById('sStatus');
  if(scanStatus)scanStatus.value=['confirmed','provisional','unknown'].includes(rec?.status)?rec.status:'unknown';
+ const scanNotes=document.getElementById('sNotes');
+ if(scanNotes && document.activeElement!==scanNotes)scanNotes.value=rec?.notes||'';
 
  const rr=signalRating('rsrp',fields.rsrp),rq=signalRating('rsrq',fields.rsrq),sr=signalRating('snr',fields.snr);
  const vals=[]; if(fields.rsrp)vals.push(rr); if(fields.rsrq)vals.push(rq); if(fields.snr)vals.push(sr);
@@ -7434,6 +7476,7 @@ function fillScanResults(x,text){
 
  resetScanSaveAllState();
  document.getElementById('sSite').value='';
+ document.getElementById('sNotes').value='';
  document.getElementById('sPlmn').value=x.plmn;
  document.getElementById('sRadio').value=x.radio;
  document.getElementById('sCell').value=x.cell;
