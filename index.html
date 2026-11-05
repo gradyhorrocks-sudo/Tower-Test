@@ -4906,7 +4906,7 @@ function identifyFromScan(fields){
 </div>
  ${radio==='5G'?forcedKnownLteBanner(fields):''}
  ${fields._registryIdentityMatched?'<div class="notice" style="margin-top:10px"><b>Registry identity:</b> Cell ID math matched this saved tower. Saved carrier/PLMN/site override the hotspot operator label.</div>':''}
- <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
+ <div style="margin-top:10px"><b>Math:</b> ${esc(math)}${scanIdentifierMathDetails(fields)}${scanDualRadioMathDetails(fields)}</div>
  
  ${rec?.notes?'<div class="small" style="margin-top:8px">'+esc(rec.notes)+'</div>':''}
  ${unknownAddButton}
@@ -6024,6 +6024,33 @@ function parseDualRadioSections(text){
  };
 }
 
+// v136: Explain integer identifier math without altering saved tower identities.
+function scanIdentifierMathDetails(fields){
+ const f=fields||{}, raw=String(f.cell||'').replace(/\D/g,''), radio=String(f.radio||'').toUpperCase();
+ if(!/^\d+$/.test(raw)||!raw)return '';
+ const n=BigInt(raw);
+ if(radio==='LTE'){
+   const id=n/256n, local=n%256n;
+   return `<div style="margin-top:8px"><b>LTE exact calculation</b><div>Cell ID ${esc(raw)} ÷ 256 = eNB <b>${id}</b>, remainder <b>${local}</b></div><div>${esc(raw)} = (${id} × 256) + ${local} ✅</div><div>Display: <b>eNB ${id}:${local}</b> • stored ID: ${id} • sector: ${local}</div></div>`;
+ }
+ if(radio!=='5G')return '';
+ const candidate=n/4096n, local=n%4096n;
+ const savedId=String(f.sid||'').trim(), savedLocal=String(f.local||'').trim();
+ const explicit=/^\d+$/.test(savedId)&&/^\d+$/.test(savedLocal);
+ const consistent=explicit && BigInt(savedId)*4096n+BigInt(savedLocal)===n;
+ const source=String(f._resolutionSource||'');
+ const verified=consistent && (source==='exact-cell'||source==='derived-5g'||source==='registry-match');
+ return `<div style="margin-top:8px"><b>5G NCI calculation (12-bit local-cell candidate)</b><div>NCI ${esc(raw)} ÷ 4096 = gNB <b>${candidate}</b>, remainder <b>${local}</b></div><div>${esc(raw)} = (${candidate} × 4096) + ${local} ✅</div><div>Candidate display: <b>gNB ${candidate}:${local}</b></div><div class="small muted">${verified?'Matches the saved registry identity.':'Candidate only: confirm the gNB bit split or compare with a directly reported CellMapper gNB before saving. A valid calculation alone does not verify the tower ID.'}</div>${explicit&&!consistent?`<div class="small" style="color:#fbbf24">Saved/scanned gNB ${esc(savedId)}:${esc(savedLocal)} does not match this 12-bit NCI split. Do not overwrite automatically.</div>`:''}</div>`;
+}
+function scanDualRadioMathDetails(fields){
+ const d=fields?.dualRadioStats;
+ if(!d?.lte?.cell)return '';
+ const nstr=String(d.lte.cell).replace(/\D/g,'');
+ if(!nstr)return '';
+ const n=BigInt(nstr), id=n/256n, local=n%256n;
+ return `<div style="margin-top:8px"><b>LTE connection in same screenshot</b><div>Cell ID ${esc(nstr)} ÷ 256 = eNB <b>${id}</b>, remainder <b>${local}</b></div><div>${esc(nstr)} = (${id} × 256) + ${local} ✅</div><div>Display: <b>eNB ${id}:${local}</b></div><div class="small muted">Separate LTE identity. Do not merge with the 5G tower.</div></div>`;
+}
+
 function safe5gIdentifierMath(cell){
  // For these iPhone diagnostic screenshots, do not assume a gNB/local-cell split
  // unless the app has an explicit trusted rule for the format. Preserve the NCI only.
@@ -7027,8 +7054,8 @@ function identifyFromScan(fields){
  <div class="label">LTE/5G</div><div>${esc((fields?.dualRadioStats?.five?.cell&&fields?.dualRadioStats?.lte?.cell)?'5G + LTE':radio)}</div>
  <div class="label">Band</div><div>${esc(radio==='5G'?(sanitizeNrBand(fields.band)||'Unknown'):(fields.band||rec?.bands||'Unknown'))}</div>
  <div class="label">Bandwidth</div><div>${esc(fields.bw||rec?.bandwidth||'Unknown')}</div>
- <div class="label">${radio==='LTE'?'eNB':'gNB'}</div><div>${esc(sid||'Unknown')}</div>
- <div class="label">${radio==='LTE'?'Sector/local cell':'Local cell'}</div><div>${esc(radio==='5G'?'Unknown':(fields.local||'Unknown'))}</div>
+ <div class="label">${radio==='LTE'?'eNB':'gNB'}</div><div>${esc(sid||'Unknown')}${sid && /^\d+$/.test(String(sid)) && /^\d+$/.test(String(local||fields.local||'')) ? ':'+esc(String(local||fields.local)) : ''}</div>
+ <div class="label">${radio==='LTE'?'Sector/local cell':'Local cell'}</div><div>${esc(String(local||fields.local||'Unknown'))}</div>
  <div class="label">Cell ID/NCI</div><div>${esc(raw)}</div>
  <div class="label">PCI</div><div>${esc(fields.pci||'Unknown')}</div>
  <div class="label">TAC</div><div>${esc(fields.tac||'Unknown')} ${tacnote?'<span class="small muted">('+esc(tacnote)+')</span>':''}</div>
@@ -7058,7 +7085,7 @@ function identifyFromScan(fields){
  </div>
  ${radio==='5G'?sameCellKnownLteBanner(fields):''}
  ${radio==='5G'?forcedKnownLteBanner(fields):''}
- <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
+ <div style="margin-top:10px"><b>Math:</b> ${esc(math)}${scanIdentifierMathDetails(fields)}${scanDualRadioMathDetails(fields)}</div>
  
  </div>`;
 
