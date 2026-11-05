@@ -6870,6 +6870,8 @@ function identifyFromScan(fields){
  }
 
  let plmn=fields.plmn||'', radio=fields.radio||'LTE', raw=fields.cell||'', sid=fields.sid||'';
+ // Local cell is a separate integer field, never a decimal part of the tower ID.
+ let local=String(fields.local??'').trim();
 
  if(!plmn || !raw || !sid){
    const missing=[];
@@ -6946,6 +6948,7 @@ function identifyFromScan(fields){
    plmn=fields.plmn||plmn;
    radio=fields.radio||radio;
    sid=fields.sid||sid;
+   local=String(fields.local??'').trim();
    carrier=fields.carrier||DB.plmns[plmn]||carrier;
  }
 
