@@ -351,7 +351,7 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <section id="tab-lookup">
 <div class="card">
 <h3>Search Towers</h3>
-<p class="muted small">Search anything you know about a tower. Tap Add/Edit Info on any result to open that exact tower and add missing data. Matches can come from tower name, carrier, PLMN, LTE/5G, eNB/gNB, Cell ID/NCI, sector/local cell, PCI, TAC, band, bandwidth, status, notes, coordinates, or verification state. Numeric searches also run LTE /256 and 5G /4096 math.</p>
+<p class="muted small">Search anything you know about a tower. Tap Add/Edit Info on any result to open that exact tower and add missing data. Matches can come from tower name, carrier, PLMN, LTE/5G, eNB/gNB, Cell ID/NCI, sector/local cell, PCI, TAC, band, bandwidth, status, notes, coordinates, or verification state. Numeric searches also check LTE /256 and registry-matched 5G splits. Unverified 5G splits are not confirmed tower identities.</p>
 
 <div class="grid">
 <div>
@@ -435,20 +435,21 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <div><label>PLMN</label><input id="sPlmn"></div>
 <div><label>Radio</label><select id="sRadio"><option>LTE</option><option>5G</option></select></div>
 <div><label>Cell ID / NCI</label><input id="sCell"></div>
-<div><label>eNB / gNB</label><input id="sId"></div>
-<div><label>Sector / local cell</label><input id="sLocal"></div>
+<div><label>eNB / gNB (whole number; optional :sector)</label><input id="sId" inputmode="text" placeholder="1849020 or 1849020:3"></div>
+<div><label>Sector / local cell (stored separately)</label><input id="sLocal" inputmode="numeric"></div>
 <div><label>Band</label><input id="sBand"></div>
 <div><label>Bandwidth</label><input id="sBw"></div>
 <div><label>PCI</label><input id="sPci"></div>
 <div><label>TAC</label><input id="sTac"></div>
-<div style="grid-column:1/-1;margin-top:4px"><b>Scanned Signal Values</b><div class="small">These belong to the scanned tower result and can be edited before Save All.</div></div>
+<div><label>Verification status</label><select id="sStatus"><option value="confirmed">Confirmed</option><option value="provisional">Provisional ?</option><option value="unknown">Unmapped / Unknown ?</option></select></div>
+<div style="grid-column:1/-1;margin-top:4px"><b>Scanned Signal Values</b><div class="small">These belong to the scanned tower result. Changes to an existing tower save automatically after you finish editing a field.</div></div>
 <div><label>RSRP</label><input id="sRsrp" inputmode="decimal"></div>
 <div><label>RSRQ</label><input id="sRsrq" inputmode="decimal"></div>
 <div><label>SNR / SINR</label><input id="sSnr" inputmode="decimal"></div>
 </div>
 <div style="margin-top:12px">
   <button id="scanSaveAllBtn" class="good" type="button" onclick="saveAllScanEdits()" style="width:100%;font-size:1.05rem">Save All</button>
-  <div id="scanSaveAllStatus" class="small" style="margin-top:7px"></div>
+  <div id="scanSaveAllStatus" class="small" style="margin-top:7px" role="status" aria-live="polite"></div>
 </div>
 <div style="margin-top:12px">
 <label>OCR text</label>
@@ -708,6 +709,19 @@ function goBackFromAddEdit(){
 }
 function esc(s){return String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2200)}
+// eNB/gNB is always an integer tower ID. A CellMapper-style colon suffix
+// denotes a separate sector/local-cell value, never a decimal or rounded ID.
+function parseTowerIdentity(value){
+ const raw=String(value??'').trim();
+ const m=raw.match(/^([0-9]+)(?::([0-9]+))?$/);
+ if(!m)return null;
+ return {id:BigInt(m[1]).toString(),local:m[2]===undefined?'':BigInt(m[2]).toString()};
+}
+function towerIdentityLabel(r){
+ const id=parseTowerIdentity(r?.eNB||r?.gNB||'');
+ const local=String(r?.local_cell??'').trim();
+ return id?(id.id+(/^[0-9]+$/.test(local)?':'+BigInt(local).toString():'')):'Unknown';
+}
 function keyOf(r){return `${r.carrier}|${r.radio}|${r.eNB||r.gNB||''}`}
 function saveLocal(reason='tower/registry save'){
  try{stampRegistryForSync()}catch(e){}
@@ -2427,6 +2441,21 @@ function universalLookup(){
  if(summary)summary.textContent=`${found.length} matching registry record${found.length===1?'':'s'}.`;
 
  if(!found.length){
+   // A deleted identifier is not an unknown tower. Tombstones remain in
+   // local/cloud data to prevent older replicas from resurrecting a deletion.
+   const deletedMatches=(DB.records||[]).filter(base=>{
+     const effective=(typeof getEffectiveRecord==='function')?getEffectiveRecord(base):base;
+     if(!effective?.__delete)return false;
+     return [base.eNB,base.gNB,base.cell_id,effective.eNB,effective.gNB,effective.cell_id]
+       .some(v=>String(v??'').trim()===raw);
+   });
+   if(raw && deletedMatches.length){
+     out.innerHTML=`<div class="card result"><h2>DELETED / INACTIVE RECORD</h2>
+       <div>${deletedMatches.length} saved deletion marker${deletedMatches.length===1?'':'s'} for identifier <b>${esc(raw)}</b>.</div>
+       <div style="margin-top:8px">These records are intentionally excluded from active Lookup and Map results. The markers are retained to protect against restoration from older cloud copies.</div>
+       <div style="margin-top:8px">If the tower reappears as active on another device, the cloud sync backend needs inspection.</div></div>`;
+     return;
+   }
    if(/^\d+$/.test(raw)){
      const n=BigInt(raw);
      const enb=(n/256n).toString(),sector=(n%256n).toString();
@@ -3843,9 +3872,18 @@ function saveRecordOnce(){
 function coreSaveRecord(){
  const isNewRecord=!document.getElementById('editKey').value.trim();
  if(!DB)return false;
- const carrier=document.getElementById('fCarrier').value,radio=document.getElementById('fRadio').value,id=document.getElementById('fId').value.trim(),site=document.getElementById('fSite').value.trim();
+ const carrier=document.getElementById('fCarrier').value,radio=document.getElementById('fRadio').value;let id=document.getElementById('fId').value.trim();const site=document.getElementById('fSite').value.trim();
  if(!id||!site){toast('Tower ID and site name are required.');return false}
  if(!carrier.trim()){toast('Carrier name is required. Select or enter the carrier before saving.');document.getElementById('fCarrier').focus();return false}
+ const parsedFormId=parseTowerIdentity(id);
+ if(!parsedFormId){toast('Use a whole-number eNB/gNB, optionally :sector. Decimals are not valid.');return false;}
+ if(parsedFormId.local){
+   const localField=document.getElementById('fLocal');
+   if(localField.value.trim() && localField.value.trim()!==parsedFormId.local){toast('Tower ID suffix disagrees with local cell.');return false;}
+   localField.value=parsedFormId.local;
+ }
+ id=parsedFormId.id;
+ document.getElementById('fId').value=id;
  const oldKey=document.getElementById('editKey').value;
  const newKey=`${carrier}|${radio}|${id}`;
  const existingIndex=DB.records.findIndex(r=>keyOf(r)===newKey);
@@ -5568,6 +5606,8 @@ function enrichSparseLteScan(fields){
 
 let activeScanRecordKey='';
 let scanSaveAllBusy=false;
+let scanAutoSaveTimer=null;
+let scanAutoSaveQueued=false;
 
 function resetScanSaveAllState(){
  scanSaveAllBusy=false;
@@ -5579,6 +5619,8 @@ function resetScanSaveAllState(){
    btn.removeAttribute('aria-busy');
  }
  if(st)st.textContent='';
+ clearTimeout(scanAutoSaveTimer);
+ scanAutoSaveQueued=false;
 }
 
 function currentScanEditFields(){
@@ -5595,11 +5637,40 @@ function currentScanEditFields(){
    tac:(document.getElementById('sTac')?.value||'').trim(),
    rsrp:(document.getElementById('sRsrp')?.value||'').trim(),
    rsrq:(document.getElementById('sRsrq')?.value||'').trim(),
-   snr:(document.getElementById('sSnr')?.value||'').trim()
+   snr:(document.getElementById('sSnr')?.value||'').trim(),
+   status:(document.getElementById('sStatus')?.value||'unknown')
  };
 }
 
+// User-initiated Scan edits only. OCR filling fields programmatically does not trigger autosave.
+function queueScanAutoSave(){
+ clearTimeout(scanAutoSaveTimer);
+ scanAutoSaveQueued=true;
+ const st=document.getElementById('scanSaveAllStatus');
+ if(st)st.textContent='Unsaved edit • waiting for you to finish typing…';
+ scanAutoSaveTimer=setTimeout(flushScanAutoSave,1100);
+}
+function flushScanAutoSave(){
+ if(!scanAutoSaveQueued)return;
+ if(scanSaveAllBusy){scanAutoSaveTimer=setTimeout(flushScanAutoSave,350);return;}
+ scanAutoSaveQueued=false;
+ saveAllScanEdits();
+}
+function installScanAutoSave(){
+ const root=document.getElementById('scanResults');
+ if(!root||root.dataset.autoSaveInstalled==='1')return;
+ root.dataset.autoSaveInstalled='1';
+ const ids=new Set(['sSite','sPlmn','sRadio','sCell','sId','sLocal','sBand','sBw','sPci','sTac','sRsrp','sRsrq','sSnr','sStatus']);
+ root.addEventListener('input',e=>{if(ids.has(e.target?.id))queueScanAutoSave();});
+ root.addEventListener('change',e=>{if(ids.has(e.target?.id))queueScanAutoSave();});
+ root.addEventListener('focusout',e=>{if(ids.has(e.target?.id)&&scanAutoSaveQueued){clearTimeout(scanAutoSaveTimer);scanAutoSaveTimer=setTimeout(flushScanAutoSave,100);}});
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',installScanAutoSave);
+else installScanAutoSave();
+
 function saveAllScanEdits(){
+ clearTimeout(scanAutoSaveTimer);
+ scanAutoSaveQueued=false;
  if(scanSaveAllBusy)return false;
 
  const btn=document.getElementById('scanSaveAllBtn');
@@ -5615,7 +5686,14 @@ function saveAllScanEdits(){
    return false;
  }
 
- const carrier=(DB?.plmns?.[f.plmn])||'Unknown';
+ const parsedIdentity=parseTowerIdentity(f.sid);
+ if(!parsedIdentity){if(st)st.textContent='Invalid tower ID: enter a whole number, optionally followed by :sector. No decimals or rounding.';return false;}
+ if(parsedIdentity.local && f.local && BigInt(f.local).toString()!==parsedIdentity.local){if(st)st.textContent='Tower ID suffix and local cell disagree. Correct them before saving.';return false;}
+ f.sid=parsedIdentity.id;
+ if(parsedIdentity.local)f.local=parsedIdentity.local;
+ if(f.local && !/^[0-9]+$/.test(f.local)){if(st)st.textContent='Sector/local cell must be a whole number.';return false;}
+ const carrier=(DB?.plmns?.[f.plmn]);
+ if(!carrier){if(st)st.textContent='Not saved: enter a recognized PLMN first.';return false;}
 
  let rec=null;
  if(activeScanRecordKey){
@@ -5646,6 +5724,7 @@ function saveAllScanEdits(){
 
  // Save all editable scan fields to the matched record.
  rec.site=f.site;
+ rec.status=["confirmed","provisional","unknown"].includes(f.status)?f.status:"unknown";
  rec.carrier=carrier;
  rec.radio=f.radio;
  rec.plmn=f.plmn;
@@ -5665,14 +5744,8 @@ function saveAllScanEdits(){
  rec.snr=f.snr;
  rec.bandwidth=f.bandwidth;
 
- if(f.band){
-   if(typeof mergeBandIntoList==='function'){
-     const merged=mergeBandIntoList(rec.bands||'',f.band,f.radio);
-     rec.bands=merged.value||rec.bands||f.band;
-   }else{
-     rec.bands=f.band;
-   }
- }
+ // Scan editor is an editor, not an additive scan merge. Allow replacing or clearing bands.
+ rec.bands=f.band;
 
  saveLocal('scan tower + signal values saved');
  activeScanRecordKey=keyOf(rec);
@@ -5689,7 +5762,7 @@ function saveAllScanEdits(){
    btn.textContent='✓ Saved';
    btn.removeAttribute('aria-busy');
  }
- if(st)st.textContent='✓ All scan edits saved to the Registry.';
+ if(st)st.textContent='✓ Saved locally and queued for cloud sync. Check cloud status for confirmation.';
 
  setTimeout(()=>{
    scanSaveAllBusy=false;
@@ -6825,6 +6898,8 @@ function identifyFromScan(fields){
    scanSite.value=rec?.site||name||'';
  }
  resetScanSaveAllState();
+ const scanStatus=document.getElementById('sStatus');
+ if(scanStatus)scanStatus.value=['confirmed','provisional','unknown'].includes(rec?.status)?rec.status:'unknown';
 
  const rr=signalRating('rsrp',fields.rsrp),rq=signalRating('rsrq',fields.rsrq),sr=signalRating('snr',fields.snr);
  const vals=[]; if(fields.rsrp)vals.push(rr); if(fields.rsrq)vals.push(rq); if(fields.snr)vals.push(sr);
