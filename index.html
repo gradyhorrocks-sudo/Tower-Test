@@ -1497,38 +1497,78 @@ function renderTowerMap(){
        });
        actions.appendChild(move);
      }
+     // Individual map management: preserve registry identity and all metadata.
+     // Detaching a record clears both group memberships; it does not delete the record.
+     function manageIndividualMapRecord(record,mode){
+       if(!DB || !record || record.__delete)return;
+       const identity=keyOf(record);
+       const idx=DB.records.findIndex(r=>keyOf(r)===identity);
+       if(idx<0){alert('Tower record not found. Nothing changed.');return;}
+       const original=cloneRecord(DB.records[idx]);
+       const name=(record.radio==='LTE'?'eNB ':'gNB ')+String(record.eNB||record.gNB||'');
+       if(mode==='unlocated' && !confirm('Move '+name+' to Towers without map locations? The tower stays in Registry; only its map location and pin groups are cleared.'))return;
+       if(mode==='separate' && !confirm('Separate '+name+' into its own movable map pin? Other tower records will not change.'))return;
+       const next={...DB.records[idx]};
+       delete next.mapPinGroup;
+       delete next.mapColocationGroup;
+       if(mode==='unlocated'){
+         delete next.latitude;
+         delete next.longitude;
+       }
+       next._syncModifiedAt=Math.max(Date.now(),Number(next._syncModifiedAt||0)+1);
+       DB.records[idx]=next;
+       try{saveLocal(mode==='unlocated'?'Unlocate '+name:'Separate map pin '+name);}
+       catch(err){DB.records[idx]=original;alert('Unable to save map change: '+String(err?.message||err));return;}
+       // Staged edits must not reapply the previous location or groups.
+       const staged=pendingTowerChanges[identity];
+       if(staged){
+         for(const k of ['latitude','longitude','mapPinGroup','mapColocationGroup'])delete staged.changes[k];
+         if(!Object.keys(staged.changes).length)delete pendingTowerChanges[identity];
+       }
+       marker.closePopup();
+       refreshPendingChangesUI();
+       renderTowerMap();
+       renderUnmappedTowerList();
+       scheduleCloudSync(200);
+       if(mode==='separate'){
+         // Launch the existing single-record location editor, which supplies
+         // a draggable preview and an explicit Save Location operation.
+         showMapLocationControls(DB.records[idx]);
+         const lat=Number(original.latitude),lon=Number(original.longitude);
+         if(validCoord(lat,-90,90)&&validCoord(lon,-180,180)){
+           stageTowerLocationChange(DB.records[idx],lat,lon,'separate');
+           towerMap.setView([lat,lon],Math.max(towerMap.getZoom(),17));
+         }
+         toast('Separated '+name+'. Drag the preview marker, then tap Save Location.');
+       }else toast(name+' moved to Towers without map locations. Syncing…');
+     }
      // Individual record actions: never delete the whole colocated site.
      const recordPanel=document.createElement('div');
      recordPanel.style.cssText='border-top:1px solid #d6dbe2;margin-top:8px;padding-top:8px';
      const recordToggle=document.createElement('button');recordToggle.type='button';
-     recordToggle.textContent='Remove one eNB / gNB ▾';
+     recordToggle.textContent='Manage one eNB / gNB ▾';
      recordToggle.style.cssText='display:block;width:100%;padding:8px';
      const recordChoices=document.createElement('div');recordChoices.hidden=true;
      recordToggle.addEventListener('click',()=>{
        recordChoices.hidden=!recordChoices.hidden;
-       recordToggle.textContent=recordChoices.hidden?'Remove one eNB / gNB ▾':'Select individual tower ID ▴';
+       recordToggle.textContent=recordChoices.hidden?'Manage one eNB / gNB ▾':'Hide individual tower options ▴';
      });
      for(const entry of site){
        const record=entry.record;
-       const effective=getEffectiveRecord(record);
-       if(effective.__delete)continue;
-       const recordKey=keyOf(record);
+       if(getEffectiveRecord(record).__delete)continue;
        const kind=record.radio==='LTE'?'eNB':'gNB';
        const id=String(record.eNB||record.gNB||'');
-       const label=String(effective.carrier||record.carrier||'Unknown')+' · '+kind+' '+id;
-       const single=document.createElement('button');single.type='button';
-       single.textContent='Delete '+label;
-       single.style.cssText='display:block;width:100%;margin-top:6px;padding:8px;background:#a22;color:white';
-       single.addEventListener('click',()=>{
-         // Existing deletion flow marks only the exact carrier + radio + ID.
-         // Explicit confirmation and Save All Changes are required.
-         marker.closePopup();
-         deleteRecord(recordKey);
-       });
-       recordChoices.appendChild(single);
+       const label=String(record.carrier||'Unknown')+' · '+kind+' '+id;
+       for(const [mode,title] of [['separate','Separate & move on map'],['unlocated','Move to Towers without location']]){
+         const single=document.createElement('button');single.type='button';
+         single.textContent=title+' · '+label;
+         single.style.cssText='display:block;width:100%;margin-top:6px;padding:8px;white-space:normal';
+         single.addEventListener('click',()=>manageIndividualMapRecord(record,mode));
+         recordChoices.appendChild(single);
+       }
      }
      const recordHint=document.createElement('div');recordHint.style.cssText='font-size:12px;margin-top:6px';
-     recordHint.textContent='Deletes only the selected carrier/radio/tower ID. Confirm, then use Save All Changes. Other colocated IDs remain.';
+     recordHint.textContent='Neither option deletes a registry record. Separate opens a draggable location preview; unlocated clears coordinates. Other IDs and carriers stay unchanged.';
      recordChoices.appendChild(recordHint);
      recordPanel.append(recordToggle,recordChoices);
      actions.append(combine,colocate,edit,recordPanel);content.appendChild(actions);
