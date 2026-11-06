@@ -1497,7 +1497,41 @@ function renderTowerMap(){
        });
        actions.appendChild(move);
      }
-     actions.append(combine,colocate,edit);content.appendChild(actions);
+     // Individual record actions: never delete the whole colocated site.
+     const recordPanel=document.createElement('div');
+     recordPanel.style.cssText='border-top:1px solid #d6dbe2;margin-top:8px;padding-top:8px';
+     const recordToggle=document.createElement('button');recordToggle.type='button';
+     recordToggle.textContent='Remove one eNB / gNB ▾';
+     recordToggle.style.cssText='display:block;width:100%;padding:8px';
+     const recordChoices=document.createElement('div');recordChoices.hidden=true;
+     recordToggle.addEventListener('click',()=>{
+       recordChoices.hidden=!recordChoices.hidden;
+       recordToggle.textContent=recordChoices.hidden?'Remove one eNB / gNB ▾':'Select individual tower ID ▴';
+     });
+     for(const entry of site){
+       const record=entry.record;
+       const effective=getEffectiveRecord(record);
+       if(effective.__delete)continue;
+       const recordKey=keyOf(record);
+       const kind=record.radio==='LTE'?'eNB':'gNB';
+       const id=String(record.eNB||record.gNB||'');
+       const label=String(effective.carrier||record.carrier||'Unknown')+' · '+kind+' '+id;
+       const single=document.createElement('button');single.type='button';
+       single.textContent='Delete '+label;
+       single.style.cssText='display:block;width:100%;margin-top:6px;padding:8px;background:#a22;color:white';
+       single.addEventListener('click',()=>{
+         // Existing deletion flow marks only the exact carrier + radio + ID.
+         // Explicit confirmation and Save All Changes are required.
+         marker.closePopup();
+         deleteRecord(recordKey);
+       });
+       recordChoices.appendChild(single);
+     }
+     const recordHint=document.createElement('div');recordHint.style.cssText='font-size:12px;margin-top:6px';
+     recordHint.textContent='Deletes only the selected carrier/radio/tower ID. Confirm, then use Save All Changes. Other colocated IDs remain.';
+     recordChoices.appendChild(recordHint);
+     recordPanel.append(recordToggle,recordChoices);
+     actions.append(combine,colocate,edit,recordPanel);content.appendChild(actions);
    });
    if(colocated && site.some(e=>e.record.mapColocationGroup)){
      marker.on('popupopen',ev=>{
